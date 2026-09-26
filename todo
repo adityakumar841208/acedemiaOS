@@ -1,0 +1,12 @@
+fix assignment submission card
+
+resource 
+
+assignment
+notification
+
+ensure all works proper
+then deploy it 
+if possible add cloudinary
+
+/auth/me and /api/notification isn't working fix it.
