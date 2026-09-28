@@ -40,7 +40,7 @@ export default function Sidebar() {
       return [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "Assignment Studio", href: "/faculty/assignments", icon: PlusCircle },
-        { name: "Grade Submissions", href: "/faculty/submissions/assign-01", icon: Award },
+        { name: "Grade Submissions", href: "/faculty/submissions", icon: Award },
         { name: "Resource Vault", href: "/resources", icon: FolderArchive },
         { name: "Announcements", href: "/announcements", icon: Megaphone },
         { name: "My Profile", href: "/profile", icon: User },
@@ -126,14 +126,14 @@ export default function Sidebar() {
           href="/profile"
           className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-slate-800/70 transition-colors group"
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-linear-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
             {user?.name ? user.name[0].toUpperCase() : "U"}
           </div>
           <div className="truncate flex-1">
             <div className="text-xs font-semibold text-slate-200 group-hover:text-indigo-400 truncate">
               {user?.name || "Authenticated User"}
             </div>
-            <div className="text-[10px] text-slate-400 truncate font-semibold uppercase tracking-wider text-indigo-400">
+            <div className="text-[10px] truncate font-semibold uppercase tracking-wider text-indigo-400">
               {role || "STUDENT"}
             </div>
           </div>

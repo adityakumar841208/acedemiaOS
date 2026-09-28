@@ -68,9 +68,12 @@ function hexPoints(
   r: number,
   direction: "horizontal" | "vertical"
 ): string {
+  const format = (n: number) =>
+    String(Number(n.toFixed(3)));
+
   return hexVertexList(cx, cy, r, direction)
-    .map(([px, py]) => `${px},${py}`)
-    .join(" ")
+    .map(([px, py]) => `${format(px)},${format(py)}`)
+    .join(" ");
 }
 
 function edgeLexKey(a: HexPoint, b: HexPoint): string {

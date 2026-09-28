@@ -77,6 +77,96 @@ export const store = {
       return true;
     });
   },
+  updateSubjectSyllabus: (
+    subjectId: string,
+    data: {
+      name?: string;
+      code?: string;
+      facultyName?: string;
+      description?: string;
+      credits?: number;
+      references?: string[];
+      modules?: Array<{
+        id?: string;
+        moduleNumber: number;
+        title: string;
+        description: string;
+        topics: string[];
+      }>;
+      updatedBy: string;
+    }
+  ) => {
+    const subject = global.__LMS_STORE__!.subjects.find((s) => s.id === subjectId);
+    if (!subject) throw new Error("Subject not found");
+
+    if (data.name !== undefined) subject.name = data.name.trim();
+    if (data.code !== undefined) subject.code = data.code.trim();
+    if (data.facultyName !== undefined) subject.facultyName = data.facultyName.trim();
+    if (data.description !== undefined) subject.description = data.description.trim();
+    if (data.credits !== undefined) subject.credits = Number(data.credits);
+    if (data.references !== undefined) subject.references = data.references.filter((r) => r.trim());
+
+    subject.syllabusUpdatedAt = new Date().toISOString();
+    subject.syllabusUpdatedBy = data.updatedBy;
+
+    if (data.modules && Array.isArray(data.modules)) {
+      const formattedModules = data.modules.map((m, index) => ({
+        id: m.id || ('mod-' + subjectId + '-' + (index + 1) + '-' + Date.now()),
+        subjectId,
+        moduleNumber: m.moduleNumber || index + 1,
+        title: m.title.trim(),
+        description: m.description ? m.description.trim() : "",
+        topics: Array.isArray(m.topics) ? m.topics.map((t) => t.trim()).filter(Boolean) : [],
+      }));
+
+      global.__LMS_STORE__!.modules = [
+        ...global.__LMS_STORE__!.modules.filter((m) => m.subjectId !== subjectId),
+        ...formattedModules,
+      ];
+
+      subject.modulesCount = formattedModules.length;
+    }
+
+    // In-app notification
+    global.__LMS_STORE__!.notifications.unshift({
+      id: 'notif-' + Date.now(),
+      title: 'Syllabus Updated: ' + subject.code,
+      message: data.updatedBy + ' (CR) updated the syllabus & modules for ' + subject.name,
+      type: 'system',
+      link: '/subjects/' + subject.id,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return {
+      subject,
+      modules: global.__LMS_STORE__!.modules.filter((m) => m.subjectId === subjectId),
+    };
+  },
+  createSubject: (
+    subjectData: any,
+    initialModules?: Array<{ moduleNumber: number; title: string; description: string; topics: string[] }>
+  ) => {
+    const existing = global.__LMS_STORE__!.subjects.find((s) => s.id === subjectData.id);
+    if (existing) return existing;
+
+    global.__LMS_STORE__!.subjects.push(subjectData);
+
+    if (initialModules && initialModules.length > 0) {
+      const newModules = initialModules.map((m, idx) => ({
+        id: 'mod-' + subjectData.id + '-' + (idx + 1),
+        subjectId: subjectData.id,
+        moduleNumber: m.moduleNumber || idx + 1,
+        title: m.title.trim(),
+        description: m.description ? m.description.trim() : "",
+        topics: m.topics || [],
+      }));
+      global.__LMS_STORE__!.modules.push(...newModules);
+      subjectData.modulesCount = newModules.length;
+    }
+
+    return subjectData;
+  },
 
   // Resources
   getResources: (filters?: {

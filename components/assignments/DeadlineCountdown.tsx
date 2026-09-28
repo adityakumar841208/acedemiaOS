@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getTimeRemaining } from "@/lib/utils";
-import { Clock, Lock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { getTimeRemaining, formatDate, TimeRemaining } from "@/lib/utils";
+import { Clock, Lock, AlertTriangle } from "lucide-react";
 
 interface DeadlineCountdownProps {
   deadline: string;
@@ -15,9 +15,14 @@ export default function DeadlineCountdown({
   allowLate = false,
   onExpire,
 }: DeadlineCountdownProps) {
-  const [timeLeft, setTimeLeft] = useState(getTimeRemaining(deadline));
+  const [mounted, setMounted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<TimeRemaining>(() => getTimeRemaining(deadline));
 
   useEffect(() => {
+    setMounted(true);
+    const initial = getTimeRemaining(deadline);
+    setTimeLeft(initial);
+
     const timer = setInterval(() => {
       const remaining = getTimeRemaining(deadline);
       setTimeLeft(remaining);
@@ -29,17 +34,30 @@ export default function DeadlineCountdown({
     return () => clearInterval(timer);
   }, [deadline, onExpire]);
 
+  if (!mounted) {
+    return (
+      <div
+        suppressHydrationWarning
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 text-xs"
+      >
+        <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+        <span className="text-slate-500 font-medium">Due:</span>
+        <span className="font-semibold text-slate-800">{formatDate(deadline)}</span>
+      </div>
+    );
+  }
+
   if (timeLeft.isExpired) {
     return (
       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold">
         <Lock className="w-3.5 h-3.5 text-rose-600" />
         <span>Submission Deadline Passed</span>
         {allowLate ? (
-          <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded font-normal">
+          <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-normal">
             Late Allowed
           </span>
         ) : (
-          <span className="text-[10px] text-rose-800 bg-rose-200/60 px-1.5 py-0.2 rounded uppercase font-bold">
+          <span className="text-[10px] text-rose-800 bg-rose-200/60 px-1.5 py-0.5 rounded uppercase font-bold">
             Hard Locked
           </span>
         )}

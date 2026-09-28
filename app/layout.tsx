@@ -5,6 +5,7 @@ import { UserProvider } from "@/context/UserContext";
 import TelegramJoinButton from "@/components/layout/TelegramJoinButton";
 import { Toaster } from "sonner";
 
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

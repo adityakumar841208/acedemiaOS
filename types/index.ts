@@ -41,6 +41,9 @@ export interface Subject {
   color: string;
   description: string;
   modulesCount: number;
+  references?: string[];
+  syllabusUpdatedAt?: string;
+  syllabusUpdatedBy?: string;
 }
 
 export interface Module {

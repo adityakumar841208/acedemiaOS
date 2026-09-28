@@ -42,6 +42,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/profile");
 
+  console.log("here is the user", user);
+
   // 1. If user is logged in and trying to access /login or /register, redirect to their role home
   if (user && user.status && user.status !== "ACTIVE") {
     const loginUrl = new URL("/login", req.url);

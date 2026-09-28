@@ -20,13 +20,13 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white selection:bg-indigo-500 selection:text-white">
       {/* Background radial gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 pointer-events-none -z-10" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 pointer-events-none -z-10" />
 
       {/* Landing Navbar */}
       <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
+            <div className="w-9 h-9 rounded-xl bg-linear-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
               <GraduationCap className="w-5 h-5" />
             </div>
             <span className="text-xl font-bold tracking-tight">
@@ -58,9 +58,9 @@ export default function LandingPage() {
           className="pointer-events-none absolute inset-0 z-0"
           style={{
             maskImage:
-              "radial-gradient(ellipse 75% 65% at center, black 20%, transparent 100%)",
+              "radial-gradient(ellipse 65% 65% at center, black 20%, transparent 100%)",
             WebkitMaskImage:
-              "radial-gradient(ellipse 75% 65% at center, black 20%, transparent 100%)",
+              "radial-gradient(ellipse 65% 65% at center, black 20%, transparent 100%)",
           }}
         >
           <HexagonPattern className="absolute inset-0 h-full w-full opacity-20" />
@@ -72,14 +72,13 @@ export default function LandingPage() {
 
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-5xl mx-auto leading-tight sm:leading-none">
           The Unified LMS Organized By{" "}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-violet-300 to-amber-300">
+          <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-400 via-violet-300 to-amber-300">
             Academic Hierarchy
           </span>
         </h1>
 
-        <p className="mt-6 text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          From <strong>Department → Semester → Subject → Module → Resource</strong>.
-          Protected by server-side role authentication, HTTP-only JWT sessions, hard deadline locks, and real-time plagiarism detection.
+        <p className="mt-6 text-base sm:text-lg text-slate-200 max-w-2xl mx-auto leading-relaxed">
+          A smarter LMS connecting students, faculty, and administrators through organized learning resources, seamless assignment submissions, streamlined grading, and real-time academic announcements.
         </p>
 
         {/* CTA Buttons */}

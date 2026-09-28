@@ -9,27 +9,66 @@ import { createAssignmentNotification } from "@/lib/services/notification.servic
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const subjectId = searchParams.get("subjectId") || undefined;
+  
+  let rawAssignments: any[] = [];
   try {
     await connectToDatabase();
     const query = subjectId ? { subjectId } : {};
-    const assignments = await AssignmentModel.find(query).sort({ deadline: 1 }).lean();
-    return NextResponse.json({
-      assignments: assignments.map((assignment) => ({
+    const dbAssignments = await AssignmentModel.find(query).sort({ deadline: 1 }).lean();
+    if (dbAssignments && dbAssignments.length > 0) {
+      rawAssignments = dbAssignments.map((assignment: any) => ({
         ...assignment,
         _id: undefined,
         deadline: assignment.deadline.toISOString(),
         createdAt: assignment.createdAt.toISOString(),
-      })),
-    });
+      }));
+    } else {
+      rawAssignments = store.getAssignments(subjectId);
+    }
   } catch (error) {
     console.error("Assignment database read failed; using local fallback.", error);
-    return NextResponse.json({ assignments: store.getAssignments(subjectId) });
+    rawAssignments = store.getAssignments(subjectId);
   }
+
+  // Enrich with live submission & evaluation statistics
+  const enrichedAssignments = rawAssignments.map((assign) => {
+    const subs = store.getSubmissions(assign.id);
+    const totalSubmissions = subs.length;
+    const evaluatedCount = subs.filter((s) => s.status === "graded" && s.marks !== undefined).length;
+    const pendingCount = totalSubmissions - evaluatedCount;
+    const isPastDeadline = new Date(assign.deadline).getTime() < Date.now();
+    const lateCount = subs.filter((s) => s.status === "late" || (s.submittedAt && new Date(s.submittedAt) > new Date(assign.deadline))).length;
+    const totalScore = subs.filter((s) => s.status === "graded" && s.marks !== undefined).reduce((acc, s) => acc + (s.marks || 0), 0);
+    const averageScore = evaluatedCount > 0 ? Math.round((totalScore / evaluatedCount) * 10) / 10 : 0;
+    const progressPercentage = totalSubmissions > 0 ? Math.round((evaluatedCount / totalSubmissions) * 100) : 0;
+
+    let evaluationStatus: "NO_SUBMISSIONS" | "PENDING_EVALUATION" | "FULLY_EVALUATED" = "NO_SUBMISSIONS";
+    if (totalSubmissions === 0) {
+      evaluationStatus = "NO_SUBMISSIONS";
+    } else if (pendingCount > 0) {
+      evaluationStatus = "PENDING_EVALUATION";
+    } else {
+      evaluationStatus = "FULLY_EVALUATED";
+    }
+
+    return {
+      ...assign,
+      totalSubmissions,
+      pendingCount,
+      evaluatedCount,
+      lateCount,
+      averageScore,
+      progressPercentage,
+      isPastDeadline,
+      evaluationStatus,
+    };
+  });
+
+  return NextResponse.json({ assignments: enrichedAssignments });
 }
 
 export async function POST(req: NextRequest) {
   try {
-    // Enforce FACULTY or ADMIN role
     const faculty = await requireRole(["FACULTY", "ADMIN"]);
 
     const body = await req.json();

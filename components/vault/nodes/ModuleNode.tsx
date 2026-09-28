@@ -20,7 +20,7 @@ function ModuleNodeComponent({ data }: { data: ModuleNodeData }) {
       role="button"
       tabIndex={0}
       aria-label={`Explore ${module.title}`}
-      className={`group relative w-[280px] rounded-2xl p-4 cursor-pointer transition-all duration-300 select-none text-left ${
+      className={`group relative w-70 rounded-2xl p-4 cursor-pointer transition-all duration-300 select-none text-left ${
         isSelected
           ? "bg-slate-900 text-white shadow-xl shadow-purple-500/25 ring-2 ring-purple-500 scale-[1.02]"
           : "bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500 hover:-translate-y-0.5"
@@ -30,14 +30,14 @@ function ModuleNodeComponent({ data }: { data: ModuleNodeData }) {
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-3 !h-3 !bg-purple-500 !border-2 !border-white dark:!border-slate-900 !top-[-6px]"
+        className="w-3! h-3! bg-purple-500! border-2! !border-white! dark:border-slate-900! -top[-6px]!"
       />
 
       {/* Bottom Handle to Resource Types */}
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-3 !h-3 !bg-purple-500 !border-2 !border-white dark:!border-slate-900 !bottom-[-6px]"
+        className="w-3! h-3! !bg-purple-500! border-2 border-white! dark:border-slate-900! -bottom[-6px]!"
       />
 
       <div className="flex items-center justify-between mb-2">
