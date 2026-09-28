@@ -697,7 +697,8 @@ export default function FacultyGradingPortal() {
       {/* Similarity Detail Inspector Modal */}
       {inspectSimilaritySub && (
         <SimilarityDetailModal
-          submission={inspectSimilaritySub}
+          isOpen={true}
+          currentSubmission={inspectSimilaritySub}
           onClose={() => setInspectSimilaritySub(null)}
         />
       )}
