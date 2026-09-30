@@ -222,7 +222,7 @@ export default function BranchManagement() {
                     <Building className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="font-semibold text-slate-600">No branches found</p>
                     <p className="text-xs text-slate-400 mt-1">
-                      Click 'Add Branch' to define your first academic department.
+                      Click &apos;Add Branch&apos; to define your first academic department.
                     </p>
                   </td>
                 </tr>
