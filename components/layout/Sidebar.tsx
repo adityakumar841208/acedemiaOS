@@ -73,7 +73,7 @@ export default function Sidebar() {
   const navLinks = getNavLinks();
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col min-h-screen border-r border-slate-800">
+    <aside className="w-64 bg-slate-900 text-slate-300 shrink-0 flex flex-col min-h-screen border-r border-slate-800">
       {/* Workspace / Academic Hierarchy header */}
       <div className="p-4 border-b border-slate-800/80">
         <div className="flex items-center gap-2.5">

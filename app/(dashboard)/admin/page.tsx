@@ -384,7 +384,7 @@ export default function AdminPage() {
       </div>
 
       {/* Demo Reset Box */}
-      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-3xl p-6 sm:p-8 space-y-3">
+      <div className="bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-3xl p-6 sm:p-8 space-y-3">
         <h3 className="font-bold text-purple-950 text-base">
           Hackathon Evaluator Reset Utility
         </h3>

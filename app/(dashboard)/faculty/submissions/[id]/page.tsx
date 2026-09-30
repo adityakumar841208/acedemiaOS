@@ -230,7 +230,7 @@ export default function FacultyGradingPortal() {
             Assignments
           </Link>
           <span>/</span>
-          <span className="text-slate-900 font-semibold truncate max-w-[260px] sm:max-w-md">
+          <span className="text-slate-900 font-semibold truncate max-w-65 sm:max-w-md">
             {assignment.title}
           </span>
         </nav>
