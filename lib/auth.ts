@@ -20,8 +20,17 @@ export interface SafeUser {
   role: RoleType;
   status: StatusType;
   department: string;
+  branchId?: string;
+  branchIds?: string[];
   semester?: number;
   rollNumber?: string;
+  facultyProfile?: {
+    designation?: string;
+    title?: string;
+    officeLocation?: string;
+    phone?: string;
+    bio?: string;
+  };
 }
 
 export interface UserJWTPayload extends SafeUser {
@@ -101,8 +110,13 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
       role: databaseUser.role,
       status: databaseUser.status || "ACTIVE",
       department: databaseUser.department,
+      branchId: databaseUser.branchId ? databaseUser.branchId.toString() : undefined,
+      branchIds: Array.isArray(databaseUser.branchIds)
+        ? databaseUser.branchIds.map((b: any) => (b && b._id ? b._id.toString() : b.toString()))
+        : undefined,
       semester: databaseUser.semester,
       rollNumber: databaseUser.rollNumber,
+      facultyProfile: databaseUser.facultyProfile,
     };
   } catch {
     return null;

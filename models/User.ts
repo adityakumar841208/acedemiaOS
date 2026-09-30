@@ -3,6 +3,14 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export type RoleType = "STUDENT" | "CR" | "FACULTY" | "ADMIN";
 export type StatusType = "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED";
 
+export interface IFacultyProfile {
+  designation?: string;
+  title?: string;
+  officeLocation?: string;
+  phone?: string;
+  bio?: string;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
@@ -11,8 +19,11 @@ export interface IUser extends Document {
   role: RoleType;
   status: StatusType;
   department: string;
+  branchId?: mongoose.Types.ObjectId;
+  branchIds?: mongoose.Types.ObjectId[];
   semester?: number;
   rollNumber?: string;
+  facultyProfile?: IFacultyProfile;
   passwordResetTokenHash?: string;
   passwordResetExpiresAt?: Date;
   approvedBy?: mongoose.Types.ObjectId;
@@ -23,6 +34,42 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+
+const FacultyProfileSchema = new Schema<IFacultyProfile>(
+  {
+    designation: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: "Assistant Professor",
+    },
+    title: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: "Assistant Professor",
+    },
+    officeLocation: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: "",
+    },
+    phone: {
+      type: String,
+      trim: true,
+      maxlength: 25,
+      default: "",
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: "",
+    },
+  },
+  { _id: false }
+);
 
 const UserSchema = new Schema<IUser>(
   {
@@ -63,21 +110,35 @@ const UserSchema = new Schema<IUser>(
     },
     department: {
       type: String,
-      required: [true, "Department is required"],
       default: "CSE",
+      trim: true,
     },
+    branchId: {
+      type: Schema.Types.ObjectId,
+      ref: "Branch",
+      index: true,
+    },
+    branchIds: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Branch",
+        index: true,
+      },
+    ],
     semester: {
       type: Number,
       min: 1,
       max: 8,
-      default: 3,
     },
     rollNumber: {
       type: String,
       trim: true,
-      default: "",
       sparse: true,
       unique: true,
+    },
+    facultyProfile: {
+      type: FacultyProfileSchema,
+      default: undefined,
     },
     passwordResetTokenHash: { type: String, select: false },
     passwordResetExpiresAt: { type: Date, select: false },
@@ -106,4 +167,3 @@ export const User: Model<IUser> =
   mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
 
 export default User;
-
