@@ -24,6 +24,7 @@ import {
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
+import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
 
 export default function AssignmentDetailPage() {
   const { id } = useParams() as { id: string };
@@ -37,6 +38,7 @@ export default function AssignmentDetailPage() {
   // Form State
   const [content, setContent] = useState("");
   const [fileName, setFileName] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [selectedSimilaritySub, setSelectedSimilaritySub] = useState<Submission | null>(null);
 
@@ -72,23 +74,24 @@ export default function AssignmentDetailPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) {
-      toast.error("Please enter your solution code before submitting.");
+    const type = getAssignmentType(assignment?.assignmentType);
+    if (type === "text" && !content.trim()) {
+      toast.error("Please enter your written answer before submitting.");
+      return;
+    }
+    if (type !== "text" && type !== "code" && selectedFiles.length === 0) {
+      toast.error(`Please choose a ${getAssignmentConfig(type).label.toLowerCase()} file before submitting.`);
       return;
     }
 
     try {
       setSubmitting(true);
+      const formData = new FormData();
+      formData.append("content", content);
+      selectedFiles.forEach((file) => formData.append("files", file));
       const res = await fetch(`/api/assignments/${id}/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: user?.id,
-          studentName: user?.name,
-          studentRoll: user?.rollNumber || "CS22B1045",
-          content,
-          fileName: fileName || `${user?.name ? user.name.split(" ")[0] : "Student"}_Solution.cpp`,
-        }),
+        body: formData,
       });
 
       const data = await res.json();
@@ -140,6 +143,8 @@ export default function AssignmentDetailPage() {
 
   const isExpired = new Date(assignment.deadline) < new Date();
   const isLocked = isExpired && !assignment.allowLate;
+  const assignmentType = getAssignmentType(assignment.assignmentType);
+  const typeConfig = getAssignmentConfig(assignmentType);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-200">
@@ -288,15 +293,15 @@ export default function AssignmentDetailPage() {
           <div>
             <h3 className="font-bold text-base sm:text-lg text-slate-900 flex items-center gap-2">
               <FileCode className="w-5 h-5 text-indigo-600" />
-              <span>{userSubmission ? "Update Solution Code" : "Submit Your Solution"}</span>
+              <span>{userSubmission ? "Update Submission" : `Submit ${typeConfig.label}`}</span>
             </h3>
             <p className="text-xs text-slate-500">
-              Submit your C++, Java, or algorithmic code. Submissions undergo automated plagiarism checks.
+              {typeConfig.description} Comparable text and code submissions undergo similarity analysis.
             </p>
           </div>
 
-          {/* Helper buttons for Hackathon Judges */}
-          {!isLocked && (
+          {/* Helper buttons for code assignments */}
+          {!isLocked && assignmentType === "code" && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -378,7 +383,7 @@ Node* rightRotate(Node *y) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          {assignmentType === "code" && <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               File Name / Identifier
             </label>
@@ -390,11 +395,11 @@ Node* rightRotate(Node *y) {
               placeholder="e.g. Solution_AVLTree.cpp"
               className="w-full text-xs font-mono rounded-lg border border-slate-300 p-2.5 text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed"
             />
-          </div>
+          </div>}
 
-          <div>
+          {(assignmentType === "code" || assignmentType === "text") && <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Source Code / Written Submission *
+              {assignmentType === "code" ? "Source Code" : "Your Answer"} *
             </label>
             <textarea
               rows={12}
@@ -405,7 +410,28 @@ Node* rightRotate(Node *y) {
               className="w-full text-xs text-white! font-mono rounded-xl border border-slate-300 p-3.5 bg-slate-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
               required
             />
-          </div>
+          </div>}
+
+          {assignmentType !== "text" && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="submission-files">
+                {assignmentType === "code" ? "Upload Source Files (optional)" : `Upload ${typeConfig.label} *`}
+              </label>
+              <input
+                id="submission-files"
+                type="file"
+                accept={typeConfig.accept}
+                multiple={typeConfig.maxFiles > 1}
+                disabled={isLocked}
+                onChange={(e) => setSelectedFiles(Array.from(e.target.files || []).slice(0, typeConfig.maxFiles))}
+                className="w-full text-xs rounded-xl border border-dashed border-slate-300 p-3 text-slate-700 bg-slate-50 disabled:opacity-60"
+              />
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Accepted: {typeConfig.accept || "none"}. Maximum {typeConfig.maxFiles} file{typeConfig.maxFiles === 1 ? "" : "s"}; server validation is enforced.
+              </p>
+              {selectedFiles.length > 0 && <p className="mt-1 text-[11px] text-emerald-700">Selected: {selectedFiles.map((file) => file.name).join(", ")}</p>}
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-2">
             <div className="text-[11px] text-slate-400">

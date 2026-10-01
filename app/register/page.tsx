@@ -77,15 +77,15 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background gradients */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--tw-gradient-stops))] from-indigo-950/40 via-slate-950 to-slate-950 pointer-events-none -z-10" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,var(--tw-gradient-stops))] from-amber-950/35 via-slate-950 to-slate-950 pointer-events-none -z-10" />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-xl text-center">
         <Link href="/" className="inline-flex items-center gap-2.5 group mb-4">
-          <div className="w-11 h-11 rounded-2xl bg-linear-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+          <div className="w-11 h-11 rounded-2xl bg-linear-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/25 group-hover:scale-105 transition-transform">
             <GraduationCap className="w-6 h-6" />
           </div>
           <span className="text-2xl font-extrabold tracking-tight">
-            Academia<span className="text-indigo-400">OS</span>
+            Academia<span className="text-amber-300">OS</span>
           </span>
         </Link>
         <h2 className="text-2xl font-bold tracking-tight text-white">
@@ -119,7 +119,7 @@ export default function RegisterPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Aditya Kumar"
-                  className="w-full text-xs sm:text-sm bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                  className="w-full text-xs sm:text-sm bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-colors"
                   required
                 />
               </div>
@@ -154,7 +154,7 @@ export default function RegisterPage() {
                   <select
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
-                    className="w-full text-xs sm:text-sm bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full text-xs sm:text-sm bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="CSE">Computer Science (CSE)</option>
                     <option value="ECE">Electronics (ECE)</option>
@@ -172,7 +172,7 @@ export default function RegisterPage() {
                   <select
                     value={semester}
                     onChange={(e) => setSemester(Number(e.target.value))}
-                    className="w-full text-xs sm:text-sm bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full text-xs sm:text-sm bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
                       <option key={s} value={s}>
@@ -184,8 +184,8 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-3 text-xs leading-5 text-slate-400">
-              Your <span className="font-semibold text-indigo-300">Portal Roll No.</span> is generated automatically from your department after registration approval.
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-5 text-slate-400">
+              Your <span className="font-semibold text-amber-300">Portal Roll No.</span> is generated automatically from your department after registration approval.
             </div>
 
             {/* Password & Confirm Password */}
@@ -229,7 +229,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer pt-3"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs sm:text-sm shadow-lg shadow-amber-600/30 transition-all hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer pt-3"
             >
               {loading ? (
                 <>
@@ -250,7 +250,7 @@ export default function RegisterPage() {
             Already have an account?{" "}
             <Link
               href="/login"
-              className="text-indigo-400 hover:text-indigo-300 font-semibold underline"
+              className="text-amber-300 hover:text-amber-200 font-semibold underline"
             >
               Sign In here
             </Link>

@@ -101,8 +101,14 @@ export interface Assignment {
   deadline: string; // ISO string
   allowLate: boolean;
   instructions: string[];
+  assignmentType?: AssignmentType;
+  allowedFileTypes?: string[];
+  maxFileSize?: number;
+  maxFiles?: number;
   createdAt: string;
 }
+
+export type AssignmentType = "code" | "pdf" | "document" | "image" | "video" | "text" | "multiple_files";
 
 export interface SimilarityDetail {
   score: number; // 0 to 100 percentage
@@ -120,6 +126,13 @@ export interface Submission {
   studentRoll: string;
   submittedAt: string; // ISO string
   content: string;
+  submissionType?: AssignmentType;
+  files?: Array<{
+    url: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+  }>;
   fileName?: string;
   fileSize?: string;
   fileUrl?: string;
@@ -180,6 +193,26 @@ export interface NotificationItem {
   link?: string;
   isRead: boolean;
   createdAt: string;
+}
+
+export type AttendanceStatus = "present" | "absent";
+
+export interface AttendanceRecord {
+  studentId: string;
+  status: AttendanceStatus;
+}
+
+export interface AttendanceSession {
+  id: string;
+  subjectId: string;
+  facultyId: string;
+  branchId?: string;
+  branchCode: string;
+  semesterNumber: number;
+  date: string;
+  records: AttendanceRecord[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 

@@ -6,6 +6,7 @@ import { Assignment } from "@/types";
 import { useUserSession } from "@/context/UserContext";
 import DeadlineCountdown from "./DeadlineCountdown";
 import { Award, ArrowRight, FileCheck, Layers, Users } from "lucide-react";
+import { getAssignmentType } from "@/lib/assignment-types";
 
 interface AssignmentCardProps {
   assignment: Assignment;
@@ -30,6 +31,9 @@ export default function AssignmentCard({
             <span className="text-xs text-slate-500 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
               <span>{assignment.moduleTitle.slice(0, 24)}...</span>
+            </span>
+            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+              {getAssignmentType(assignment.assignmentType)}
             </span>
           </div>
 

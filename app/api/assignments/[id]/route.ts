@@ -3,6 +3,8 @@ import { store } from "@/lib/store";
 import connectToDatabase from "@/lib/db";
 import Assignment from "@/models/Assignment";
 import User from "@/models/User";
+import { requireAuth } from "@/lib/auth";
+import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
 
 const DEFAULT_CLASS_ROSTER = [
   { id: "user-student-01", name: "Aditya Kumar", rollNumber: "CS22B1045", email: "aditya.student@campus.edu", department: "CSE", semester: 3 },
@@ -18,6 +20,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const viewer = await requireAuth();
   let assignment = store.getAssignmentById(id);
   try {
     await connectToDatabase();
@@ -25,6 +28,10 @@ export async function GET(
     if (databaseAssignment) {
       const normalizedAssignment = {
         ...databaseAssignment,
+        assignmentType: getAssignmentType(databaseAssignment.assignmentType),
+        allowedFileTypes: databaseAssignment.allowedFileTypes || getAssignmentConfig(databaseAssignment.assignmentType).allowedFileTypes,
+        maxFileSize: databaseAssignment.maxFileSize || 25 * 1024 * 1024,
+        maxFiles: databaseAssignment.maxFiles ?? getAssignmentConfig(databaseAssignment.assignmentType).maxFiles,
         deadline: databaseAssignment.deadline.toISOString(),
         createdAt: databaseAssignment.createdAt.toISOString(),
       } as any;
@@ -38,7 +45,9 @@ export async function GET(
     return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
   }
 
-  const submissions = store.getSubmissions(id);
+  const submissions = store.getSubmissions(id).filter((submission) =>
+    viewer.role === "FACULTY" || viewer.role === "ADMIN" ? true : submission.studentId === viewer.id
+  );
 
   // Determine enrolled students from DB or fallback roster
   let enrolledStudents: any[] = [];

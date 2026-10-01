@@ -19,7 +19,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-[#f7f4ec]">
       <Navbar />
 
       <div className="flex-1 flex overflow-hidden">
@@ -50,12 +50,12 @@ export default function DashboardLayout({
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto flex flex-col">
           {/* Mobile menu toggle bar */}
-          <div className="md:hidden bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between">
+          <div className="md:hidden bg-[#fffdf8] border-b border-[#e5ddcc] px-4 py-2 flex items-center justify-between">
             <button
               onClick={() => setMobileSidebarOpen(true)}
               className="flex items-center gap-2 text-xs font-semibold text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"
             >
-              <Menu className="w-4 h-4 text-indigo-600" />
+              <Menu className="w-4 h-4 text-amber-700" />
               <span>Menu & Navigation</span>
             </button>
             <span className="text-xs text-slate-400">CSE • 3rd Sem</span>

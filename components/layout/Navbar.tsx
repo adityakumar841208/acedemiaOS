@@ -69,12 +69,12 @@ export default function Navbar() {
           {/* Left: Brand & Hierarchy Context */}
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 group-hover:scale-105 transition-transform">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-950 shadow-md shadow-amber-200 group-hover:scale-105 transition-transform">
                 <GraduationCap className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-1">
-                  Academia<span className="text-indigo-600">OS</span>
+                  <span className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-1">
+                    Academia<span className="text-amber-700">OS</span>
                 </span>
                 <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 block -mt-1">
                   Academic Portal
@@ -84,7 +84,7 @@ export default function Navbar() {
 
             {/* Academic Hierarchy Breadcrumb Pill */}
             <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full border border-slate-200 text-xs text-slate-600">
-              <Layers className="w-3.5 h-3.5 text-indigo-600" />
+              <Layers className="w-3.5 h-3.5 text-amber-700" />
               <span className="font-semibold text-slate-800">{user?.department || "CSE"}</span>
               <span className="text-slate-300">/</span>
               <span>Semester {user?.semester || 3}</span>
@@ -203,7 +203,7 @@ export default function Navbar() {
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
                   className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer text-left"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-linear-to-tr from-amber-500 to-yellow-300 text-white flex items-center justify-center font-bold text-xs shadow-sm">
                     {user.name ? user.name[0].toUpperCase() : "U"}
                   </div>
                   <div className="hidden sm:block">

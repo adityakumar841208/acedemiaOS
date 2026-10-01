@@ -30,3 +30,10 @@ Upcoming Features
 
 
 
+
+
+-------------------------------------------
+
+different logo at the footer
+add lil animations on the landing page
+better typography - increase the font size

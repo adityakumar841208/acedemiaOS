@@ -79,6 +79,15 @@ export async function createGradeNotification(input: {
   }
 }
 
+export async function createDoubtNotification(input: { userId: string; title: string; message: string; link: string }) {
+  try {
+    return await createNotification({ userId: input.userId, title: input.title, message: input.message, type: "doubt", link: input.link });
+  } catch (error) {
+    console.error("[Notifications] Failed to persist doubt notification", error);
+    return null;
+  }
+}
+
 export async function getNotificationsForUser(userId: string, role: string) {
   await connectToDatabase();
   return Notification.find({

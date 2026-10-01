@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { getAssignmentType } from "@/lib/assignment-types";
 
 interface EnrolledStudent {
   id: string;
@@ -252,6 +253,9 @@ export default function FacultyGradingPortal() {
               {assignment.subjectCode} - {assignment.subjectName}
             </span>
             <span className="text-xs text-slate-500">{assignment.moduleTitle}</span>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {getAssignmentType(assignment.assignmentType)}
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -526,12 +530,12 @@ export default function FacultyGradingPortal() {
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Submission Code Snippet */}
+              {/* Submission content preview */}
               <div>
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-2">
                   <div className="flex items-center gap-1.5">
                     <FileCode className="w-4 h-4 text-slate-500" />
-                    <span>Submitted Code / Solution ({gradingSub.fileName || "Solution.cpp"})</span>
+                    <span>Submitted {getAssignmentType(assignment.assignmentType)} ({gradingSub.fileName || "No file name"})</span>
                   </div>
                   {gradingSub.similarity && (
                     <SimilarityBadge
@@ -540,9 +544,20 @@ export default function FacultyGradingPortal() {
                     />
                   )}
                 </div>
-                <pre className="p-4 rounded-2xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto max-h-60 leading-relaxed border border-slate-800">
-                  {gradingSub.content}
-                </pre>
+                {gradingSub.files?.map((file) => (
+                  <div key={file.originalName} className="mb-3 rounded-2xl border border-slate-200 overflow-hidden bg-slate-50">
+                    {file.mimeType === "application/pdf" ? (
+                      <iframe title={file.originalName} src={file.url} className="w-full h-72" />
+                    ) : file.mimeType.startsWith("image/") ? (
+                      <img src={file.url} alt={file.originalName} className="max-h-72 max-w-full mx-auto object-contain" />
+                    ) : file.mimeType.startsWith("video/") ? (
+                      <video controls className="w-full max-h-72" src={file.url} />
+                    ) : (
+                      <div className="p-4 text-xs text-slate-600">{file.originalName} <a className="ml-2 text-indigo-600 underline" href={file.url} download={file.originalName}>Download file</a></div>
+                    )}
+                  </div>
+                ))}
+                {gradingSub.content && <pre className="p-4 rounded-2xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto max-h-60 leading-relaxed border border-slate-800 whitespace-pre-wrap">{gradingSub.content}</pre>}
               </div>
 
               {/* Grading Input Form */}

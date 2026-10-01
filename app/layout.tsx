@@ -18,9 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`antialiased bg-slate-50 text-slate-900 min-h-screen flex flex-col`}
-      >
+      <body className="antialiased bg-[#f7f4ec] text-slate-900 min-h-screen flex flex-col">
         <UserProvider>
           {children}
           <TelegramJoinButton />

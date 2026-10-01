@@ -21,6 +21,7 @@ import {
   INITIAL_NOTIFICATIONS,
 } from "./mock-data";
 import { analyzeSimilarity } from "./services/similarity.service";
+import { getAssignmentType } from "./assignment-types";
 
 interface LMSStoreData {
   departments: Department[];
@@ -240,9 +241,12 @@ export const store = {
     return global.__LMS_STORE__!.assignments;
   },
   getAssignmentById: (id: string) => {
-    return global.__LMS_STORE__!.assignments.find((a) => a.id === id);
+    const assignment = global.__LMS_STORE__!.assignments.find((a) => a.id === id);
+    if (assignment && !assignment.assignmentType) assignment.assignmentType = "code";
+    return assignment;
   },
   ensureAssignment: (assignment: Assignment) => {
+    assignment.assignmentType = getAssignmentType(assignment.assignmentType);
     const existing = global.__LMS_STORE__!.assignments.find((item) => item.id === assignment.id);
     if (existing) return existing;
     global.__LMS_STORE__!.assignments.unshift(assignment);

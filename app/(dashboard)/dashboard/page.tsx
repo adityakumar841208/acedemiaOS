@@ -105,7 +105,7 @@ export default function DashboardPage() {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-amber-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs text-slate-500 font-medium">Loading Academic Dashboard...</p>
         </div>
       </div>
@@ -116,12 +116,12 @@ export default function DashboardPage() {
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-200">
       <PendingStudentApprovals />
       {/* Welcome Banner */}
-      <div className="bg-linear-to-r from-indigo-900 via-slate-900 to-indigo-950 rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-indigo-800/40 relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-500/10 via-transparent to-transparent pointer-events-none" />
+      <div className="bg-linear-to-r from-[#4b350d] via-slate-900 to-[#1b1710] rounded-3xl p-6 sm:p-8 text-white shadow-lg border border-amber-700/40 relative overflow-hidden">
+        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-400/15 via-transparent to-transparent pointer-events-none" />
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-300 mb-1">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-200 mb-1">
               <span>{user?.department ? `${user.department} Department` : "Academic Portal"}</span>
               <span>•</span>
               <span className="text-amber-300 font-bold">{user?.role || "STUDENT"}</span>

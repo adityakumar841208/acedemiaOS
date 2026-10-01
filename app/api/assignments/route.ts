@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import connectToDatabase from "@/lib/db";
 import AssignmentModel from "@/models/Assignment";
 import { createAssignmentNotification } from "@/lib/services/notification.service";
+import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -18,12 +19,22 @@ export async function GET(req: NextRequest) {
     if (dbAssignments && dbAssignments.length > 0) {
       rawAssignments = dbAssignments.map((assignment: any) => ({
         ...assignment,
+        assignmentType: getAssignmentType(assignment.assignmentType),
+        allowedFileTypes: assignment.allowedFileTypes || getAssignmentConfig(assignment.assignmentType).allowedFileTypes,
+        maxFileSize: assignment.maxFileSize || 25 * 1024 * 1024,
+        maxFiles: assignment.maxFiles ?? getAssignmentConfig(assignment.assignmentType).maxFiles,
         _id: undefined,
         deadline: assignment.deadline.toISOString(),
         createdAt: assignment.createdAt.toISOString(),
       }));
     } else {
-      rawAssignments = store.getAssignments(subjectId);
+      rawAssignments = store.getAssignments(subjectId).map((assignment) => ({
+        ...assignment,
+        assignmentType: getAssignmentType(assignment.assignmentType),
+        allowedFileTypes: assignment.allowedFileTypes || getAssignmentConfig(assignment.assignmentType).allowedFileTypes,
+        maxFileSize: assignment.maxFileSize || 25 * 1024 * 1024,
+        maxFiles: assignment.maxFiles ?? getAssignmentConfig(assignment.assignmentType).maxFiles,
+      }));
     }
   } catch (error) {
     console.error("Assignment database read failed; using local fallback.", error);
@@ -81,6 +92,9 @@ export async function POST(req: NextRequest) {
       deadline,
       allowLate = false,
       instructions = [],
+      assignmentType = "code",
+      maxFileSize = 25 * 1024 * 1024,
+      maxFiles,
     } = body;
 
     if (!title || !subjectId || !deadline) {
@@ -101,6 +115,8 @@ export async function POST(req: NextRequest) {
       title: "General Module",
     };
 
+    const normalizedType = getAssignmentType(assignmentType);
+    const typeConfig = getAssignmentConfig(normalizedType);
     const newAssignment: Assignment = {
       id: `assign-${Date.now()}`,
       title,
@@ -121,6 +137,10 @@ export async function POST(req: NextRequest) {
         "Read problem statement carefully before answering.",
         "Plagiarism detection is active. Do not share solution code.",
       ],
+      assignmentType: normalizedType,
+      allowedFileTypes: typeConfig.allowedFileTypes,
+      maxFileSize: Math.min(Math.max(Number(maxFileSize) || 25 * 1024 * 1024, 1024), 100 * 1024 * 1024),
+      maxFiles: Math.min(Math.max(Number(maxFiles ?? typeConfig.maxFiles), normalizedType === "text" ? 0 : 1), 10),
       createdAt: new Date().toISOString(),
     };
 

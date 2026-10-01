@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
-export type NotificationType = "assignment" | "announcement" | "grade" | "resource" | "system";
+export type NotificationType = "assignment" | "announcement" | "grade" | "resource" | "doubt" | "system";
 
 export interface INotification extends Document {
   userId?: string;
@@ -20,7 +20,7 @@ const NotificationSchema = new Schema<INotification>(
     targetRole: { type: String, index: true },
     title: { type: String, required: true, trim: true, maxlength: 160 },
     message: { type: String, required: true, trim: true, maxlength: 1000 },
-    type: { type: String, enum: ["assignment", "announcement", "grade", "resource", "system"], required: true },
+    type: { type: String, enum: ["assignment", "announcement", "grade", "resource", "doubt", "system"], required: true },
     link: { type: String },
     isRead: { type: Boolean, default: false },
   },

@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { ASSIGNMENT_TYPE_CONFIG } from "@/lib/assignment-types";
+import { AssignmentType } from "@/types";
 
 export default function FacultyAssignmentsPage() {
   const { user, isFaculty } = useUserSession();
@@ -28,6 +30,7 @@ export default function FacultyAssignmentsPage() {
   // Form State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>("code");
   const [subjectId, setSubjectId] = useState("");
   const [moduleId, setModuleId] = useState("");
   const [totalMarks, setTotalMarks] = useState(25);
@@ -110,6 +113,7 @@ export default function FacultyAssignmentsPage() {
           deadline: new Date(deadline).toISOString(),
           allowLate,
           instructions,
+          assignmentType,
           facultyId: user?.id,
           facultyName: user?.name,
         }),
@@ -242,6 +246,25 @@ export default function FacultyAssignmentsPage() {
                 placeholder="Detailed statement, expected inputs, complexity requirements..."
                 className="w-full text-xs rounded-lg border border-slate-300 p-2.5 text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-none"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="assignment-type">
+                Assignment Type *
+              </label>
+              <select
+                id="assignment-type"
+                value={assignmentType}
+                onChange={(e) => setAssignmentType(e.target.value as AssignmentType)}
+                className="w-full text-xs rounded-lg border border-slate-300 p-2.5 bg-white text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              >
+                {Object.entries(ASSIGNMENT_TYPE_CONFIG).map(([value, config]) => (
+                  <option key={value} value={value}>{config.label}</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                {ASSIGNMENT_TYPE_CONFIG[assignmentType].description} Accepted: {ASSIGNMENT_TYPE_CONFIG[assignmentType].accept || "written answer only"}.
+              </p>
             </div>
 
             {/* Marks & Deadline */}

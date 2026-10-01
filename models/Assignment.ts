@@ -17,6 +17,10 @@ export interface IAssignment extends Document {
   deadline: Date;
   allowLate: boolean;
   instructions: string[];
+  assignmentType?: "code" | "pdf" | "document" | "image" | "video" | "text" | "multiple_files";
+  allowedFileTypes: string[];
+  maxFileSize: number;
+  maxFiles: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +43,10 @@ const AssignmentSchema = new Schema<IAssignment>(
     deadline: { type: Date, required: true, index: true },
     allowLate: { type: Boolean, default: false },
     instructions: { type: [String], default: [] },
+    assignmentType: { type: String, enum: ["code", "pdf", "document", "image", "video", "text", "multiple_files"], default: "code" },
+    allowedFileTypes: { type: [String], default: [] },
+    maxFileSize: { type: Number, default: 25 * 1024 * 1024 },
+    maxFiles: { type: Number, default: 1, min: 0, max: 10 },
   },
   { timestamps: true }
 );

@@ -17,6 +17,9 @@ import {
   User,
   LogOut,
   Building,
+  ClipboardCheck,
+  BrainCircuit,
+  MessageCircleQuestion,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -40,7 +43,9 @@ export default function Sidebar() {
       return [
         { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { name: "Assignment Studio", href: "/faculty/assignments", icon: PlusCircle },
+        { name: "Attendance", href: "/faculty/attendance", icon: ClipboardCheck },
         { name: "Grade Submissions", href: "/faculty/submissions", icon: Award },
+        { name: "Doubts", href: "/faculty/doubts", icon: MessageCircleQuestion },
         { name: "Resource Vault", href: "/resources", icon: FolderArchive },
         { name: "Announcements", href: "/announcements", icon: Megaphone },
         { name: "My Profile", href: "/profile", icon: User },
@@ -65,6 +70,9 @@ export default function Sidebar() {
       { name: "Subjects & Syllabus", href: "/subjects", icon: BookOpen },
       { name: "Resource Vault", href: "/resources", icon: FolderArchive },
       { name: "Assignments", href: "/assignments", icon: FileCheck2 },
+      { name: "Attendance", href: "/attendance", icon: ClipboardCheck },
+      { name: "Doubts", href: "/doubts", icon: MessageCircleQuestion },
+      { name: "AI Practice", href: "/ai-practice", icon: BrainCircuit },
       { name: "Announcements", href: "/announcements", icon: Megaphone },
       { name: "My Profile", href: "/profile", icon: User },
     ];
@@ -77,7 +85,7 @@ export default function Sidebar() {
       {/* Workspace / Academic Hierarchy header */}
       <div className="p-4 border-b border-slate-800/80">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold text-xs shadow-sm shadow-amber-500/20">
             {user?.department?.slice(0, 3) || "CSE"}
           </div>
           <div className="truncate">
@@ -107,7 +115,7 @@ export default function Sidebar() {
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                     isActive
-                      ? "bg-indigo-600 text-white shadow-sm font-semibold"
+                      ? "bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-semibold"
                       : "text-slate-400 hover:text-white hover:bg-slate-800/70"
                   }`}
                 >
