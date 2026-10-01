@@ -26,7 +26,7 @@ export default function StudentDoubtsPage() {
   useEffect(() => { Promise.all([load(), fetch("/api/doubts?view=options").then((response) => response.json()).then((data) => { setSubjects(data.subjects || []); setFaculty(data.faculty || []); })]).catch(() => toast.error("Unable to load doubts.")); }, []);
   const active = doubts.find((doubt) => doubt.status !== "RESOLVED");
   const selectedSubject = subjects.find((subject) => subject.id === subjectId);
-  const availableFaculty = faculty.filter((member) => !selectedSubject || member.name === selectedSubject.facultyName);
+  const availableFaculty = faculty.filter((member) => !selectedSubject || member.id === selectedSubject.facultyId || member.name === selectedSubject.facultyName);
 
   const create = async (event: React.FormEvent) => { event.preventDefault(); setSaving(true); try { const form = new FormData(); form.append("subjectId", subjectId); form.append("facultyId", facultyId); form.append("title", title); form.append("description", description); if (file) form.append("attachments", file); const response = await fetch("/api/doubts", { method: "POST", body: form }); const data = await response.json(); if (!response.ok) throw new Error(data.error); toast.success("Doubt submitted."); setOpen(false); setTitle(""); setDescription(""); setFile(null); await load(); } catch (error: any) { toast.error(error.message || "Unable to submit doubt."); } finally { setSaving(false); } };
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { requireAuth, requireRole } from "@/lib/auth";
 import connectToDatabase from "@/lib/db";
 import Doubt from "@/models/Doubt";
@@ -19,7 +20,18 @@ export async function GET(req: NextRequest) {
       if (user.role !== "STUDENT") return NextResponse.json({ subjects: [], faculty: [] });
       const subjects = await SubjectModel.find({ semesterNumber: user.semester }).select("id code name departmentId semesterNumber facultyId facultyName").lean() as any[];
       const available = subjects.filter((subject) => normalizeDepartment(subject.departmentId) === normalizeDepartment(user.department));
-      const faculty = await User.find({ role: "FACULTY", status: "ACTIVE", name: { $in: available.map((subject) => subject.facultyName) } }).select("name email department").lean();
+      const assignedFacultyIds = available
+        .map((subject) => subject.facultyId)
+        .filter((facultyId) => facultyId && mongoose.isValidObjectId(facultyId));
+      const assignedFacultyNames = available.map((subject) => subject.facultyName).filter(Boolean);
+      const faculty = await User.find({
+        role: "FACULTY",
+        status: "ACTIVE",
+        $or: [
+          ...(assignedFacultyIds.length ? [{ _id: { $in: assignedFacultyIds } }] : []),
+          ...(assignedFacultyNames.length ? [{ name: { $in: assignedFacultyNames } }] : []),
+        ],
+      }).select("name email department").lean();
       return NextResponse.json({ subjects: available, faculty: faculty.map((member: any) => ({ id: member._id.toString(), name: member.name, email: member.email })) });
     }
     const query = user.role === "STUDENT" ? { studentId: user.id } : user.role === "FACULTY" ? { facultyId: user.id } : {};

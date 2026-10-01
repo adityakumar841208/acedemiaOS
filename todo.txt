@@ -1,39 +1,20 @@
-
-1. to do mandatory features
-
+FIX THIS
 fix faculty semester there'll be no semester for faculty
-add attendance feature by faculty only - list of all student
-
-assignment submission type will be selected by faculty when they create assignment only those types will be mandatory to submit
-doubt section for students
-responsiveness
-
-2.Secondary features
-UI fixes
-testing
-add resources on cloudinary as storage.
-rate limitting
-quiz feature
-
--request optimization - indexing
-
 
 Upcoming Features
 -----------------
     1. Assignment Submission ( pdf files, doc files, images, videos, etc. )
     2. Attendance
     
-    3. Doubt Section
-    4. Latency Optimisation
-    5. UI
-    6. Quiz ( Optional )
+    3. Doubt Section - done
+    4. Latency Optimisation - current
+    5. UI - done
 
 
-
-
-
--------------------------------------------
+attendance one month submission - current
+------------------------------------------
 
 different logo at the footer
 add lil animations on the landing page
 better typography - increase the font size
+-----------------------------------

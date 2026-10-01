@@ -3,6 +3,8 @@ import { sendMessage } from "@/lib/integrations/telegram/client";
 import { formatAnnouncementMessage } from "@/lib/integrations/telegram/messages";
 import { TelegramDestination } from "@/lib/integrations/telegram/types";
 import { store } from "@/lib/store";
+import AnnouncementModel from "@/models/Announcement";
+import connectToDatabase from "@/lib/db";
 
 const DEFAULT_DESTINATION_ID = "telegram-default";
 
@@ -91,9 +93,17 @@ export async function sendTelegramAnnouncement(announcement: Announcement, annou
 }
 
 export async function retryTelegramAnnouncement(announcementId: string, announcementUrl?: string) {
-  const announcement = store.getAnnouncements().find((item) => item.id === announcementId);
+  let announcement = store.getAnnouncements().find((item) => item.id === announcementId);
+  if (!announcement) {
+    await connectToDatabase();
+    const persisted = await AnnouncementModel.findOne({ id: announcementId }).lean();
+    if (persisted) announcement = persisted as unknown as Announcement;
+  }
   if (!announcement) throw new Error("Announcement not found.");
   if (!announcement.telegram?.enabled) throw new Error("Telegram delivery is disabled for this announcement.");
   if (announcement.telegram.status === "SENT") return announcement;
-  return sendTelegramAnnouncement(announcement, announcementUrl);
+  const published = await sendTelegramAnnouncement(announcement, announcementUrl);
+  await connectToDatabase();
+  await AnnouncementModel.updateOne({ id: announcementId }, { $set: { telegram: published.telegram, telegramBroadcasted: published.telegramBroadcasted } });
+  return published;
 }

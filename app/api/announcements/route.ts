@@ -5,6 +5,8 @@ import { requireRole } from "@/lib/auth";
 import { sendTelegramAnnouncement } from "@/lib/services/telegram.service";
 import { z } from "zod";
 import { createAnnouncementNotification } from "@/lib/services/notification.service";
+import connectToDatabase from "@/lib/db";
+import AnnouncementModel from "@/models/Announcement";
 
 const AnnouncementInputSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -17,8 +19,14 @@ const AnnouncementInputSchema = z.object({
 });
 
 export async function GET() {
-  const announcements = store.getAnnouncements();
-  return NextResponse.json({ announcements });
+  try {
+    await connectToDatabase();
+    const announcements = await AnnouncementModel.find({}).sort({ pinned: -1, createdAt: -1 }).limit(100).lean();
+    return NextResponse.json({ announcements });
+  } catch {
+    const announcements = store.getAnnouncements();
+    return NextResponse.json({ announcements });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -46,8 +54,20 @@ export async function POST(req: NextRequest) {
     };
 
     const saved = store.createAnnouncement(newAnnouncement);
+    try {
+      await connectToDatabase();
+      await AnnouncementModel.create(newAnnouncement);
+    } catch (error) {
+      console.error("[Announcements] Failed to persist announcement", error);
+    }
     await createAnnouncementNotification(saved);
     const published = await sendTelegramAnnouncement(saved, new URL(`/announcements`, req.url).toString());
+    try {
+      await connectToDatabase();
+      await AnnouncementModel.updateOne({ id: published.id }, { $set: { telegram: published.telegram, telegramBroadcasted: published.telegramBroadcasted } });
+    } catch (error) {
+      console.error("[Announcements] Failed to persist Telegram delivery status", error);
+    }
     const message = published.telegram?.status === "FAILED"
       ? "Announcement published successfully. Telegram notification could not be delivered."
       : "Announcement published successfully.";

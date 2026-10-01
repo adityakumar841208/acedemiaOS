@@ -8,8 +8,8 @@ import { useUserSession } from "@/context/UserContext";
 type Mode = "present" | "absent";
 type Subject = { id: string; code: string; name: string; semesterNumber: number };
 type Student = { id: string; name: string; rollNumber: string };
-type Session = { _id: string; subjectId: string; date: string; records: Array<{ studentId: string; status: Mode }>; subject?: { code: string; name: string } };
-type Preview = { date: string; studentsFound: number; present: number; absent: number; errors: string[]; records: Array<{ studentId: string; name: string; rollNumber: string; status: Mode }> };
+type Session = { _id: string; subjectId: string; date: string; dayType?: "attendance" | "holiday"; holidayName?: string; records: Array<{ studentId: string; status: Mode }>; subject?: { code: string; name: string } };
+type Preview = { date: string; dayType?: "attendance" | "holiday"; holidayName?: string; studentsFound: number; present: number; absent: number; errors: string[]; records: Array<{ studentId: string; name: string; rollNumber: string; status: Mode }> };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -21,6 +21,8 @@ export default function FacultyAttendancePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [existing, setExisting] = useState<Session | null>(null);
   const [mode, setMode] = useState<Mode>("present");
+  const [dayType, setDayType] = useState<"attendance" | "holiday">("attendance");
+  const [holidayName, setHolidayName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<Session[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -42,6 +44,8 @@ export default function FacultyAttendancePage() {
     const data = await res.json();
     setStudents(data.students || []);
     setExisting(data.attendance || null);
+    setDayType(data.attendance?.dayType || "attendance");
+    setHolidayName(data.attendance?.holidayName || "");
     const target = mode;
     setSelected(new Set((data.attendance?.records || []).filter((record: any) => record.status === target).map((record: any) => record.studentId)));
   };
@@ -83,7 +87,7 @@ export default function FacultyAttendancePage() {
   const saveRecords = async (records: Array<{ studentId: string; status: Mode }>) => {
     setSaving(true);
     try {
-      const res = await fetch("/api/attendance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subjectId, date, records }) });
+      const res = await fetch("/api/attendance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subjectId, date, records, dayType, holidayName }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unable to save attendance.");
       toast.success(existing ? "Attendance updated." : "Attendance saved.");
@@ -107,6 +111,9 @@ export default function FacultyAttendancePage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unable to preview the workbook.");
     setPreview(data.preview);
+    setDate(data.preview.date);
+    setDayType(data.preview.dayType || "attendance");
+    setHolidayName(data.preview.holidayName || "");
   };
 
   if (!isFaculty && !isAdmin) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-800">Faculty access is required.</div>;
@@ -140,7 +147,12 @@ export default function FacultyAttendancePage() {
 
           {existing && <div className="mt-5 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900"><CheckCircle2 className="h-4 w-4" /> Attendance already exists for this date. Saving will update it.</div>}
 
-          <div className="mt-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-5 flex gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Attendance day type">
+            {(["attendance", "holiday"] as const).map((value) => <button key={value} type="button" onClick={() => setDayType(value)} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold capitalize ${dayType === value ? value === "holiday" ? "bg-amber-500 text-white" : "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"}`}>{value}</button>)}
+          </div>
+          {dayType === "holiday" && <label className="mt-4 block text-xs font-semibold text-slate-700">Holiday name<input value={holidayName} onChange={(event) => setHolidayName(event.target.value)} placeholder="Optional holiday name" maxLength={160} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900" /></label>}
+
+          {dayType === "attendance" && <div className="mt-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-slate-900">Quick marking</h2>
               <p className="mt-1 text-xs text-slate-500">{mode === "present" ? "Selected students are present; everyone else is absent." : "Selected students are absent; everyone else is present."}</p>
@@ -148,17 +160,17 @@ export default function FacultyAttendancePage() {
             <div className="flex rounded-lg border border-slate-300 bg-slate-50 p-1" role="group" aria-label="Attendance mode">
               {(["present", "absent"] as Mode[]).map((value) => <button key={value} type="button" onClick={() => setModeAndSelection(value)} className={`rounded-md px-3 py-2 text-xs font-semibold capitalize ${mode === value ? value === "present" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white" : "text-slate-600 hover:bg-white"}`}>{value === "present" ? "Mark present" : "Mark absent"}</button>)}
             </div>
-          </div>
+          </div>}
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          {dayType === "attendance" && <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3 text-sm font-semibold text-slate-900"><span>{counts.present} present</span><span className="text-slate-300">·</span><span>{counts.absent} absent</span></div>
             <div className="flex gap-2"><button type="button" onClick={() => setSelected(new Set(students.map((student) => student.id)))} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Select all</button><button type="button" onClick={() => setSelected(new Set())} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Clear all</button></div>
-          </div>
+          </div>}
 
-          <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
+          {dayType === "attendance" && <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
             {students.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No active students were found for this subject.</p> : students.map((student) => <button key={student.id} type="button" onClick={() => toggleStudent(student.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-500"><span className={`flex h-6 w-6 items-center justify-center rounded-md border ${selected.has(student.id) ? mode === "present" ? "border-emerald-600 bg-emerald-600 text-white" : "border-rose-600 bg-rose-600 text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-medium text-slate-900">{student.name}</span><span className="block text-xs text-slate-500">{student.rollNumber}</span></span><span className="text-xs font-medium text-slate-400">{selected.has(student.id) ? mode : mode === "present" ? "absent" : "present"}</span></button>)}
-          </div>
-          <button type="button" disabled={saving || !subjectId || students.length === 0} onClick={handleSave} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Saving attendance…" : existing ? "Update attendance" : "Save attendance"}</button>
+          </div>}
+          <button type="button" disabled={saving || !subjectId || (dayType === "attendance" && students.length === 0) || (dayType === "holiday" && !holidayName.trim())} onClick={handleSave} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Saving attendance..." : dayType === "holiday" ? "Mark holiday" : existing ? "Update attendance" : "Save attendance"}</button>
         </div>
 
         <aside className="space-y-5">

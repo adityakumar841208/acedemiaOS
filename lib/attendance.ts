@@ -6,14 +6,27 @@ export function normalizeDepartment(value?: string) {
 }
 
 export function dateKey(value: string | Date) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error("Choose a valid attendance date.");
-  return date.toISOString().slice(0, 10);
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      const [year, month, day] = normalized.split("-").map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      if (date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day) return normalized;
+    }
+    throw new Error("Choose a valid attendance date in YYYY-MM-DD format.");
+  }
+  if (Number.isNaN(value.getTime())) throw new Error("Choose a valid attendance date.");
+  return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
 }
 
 export function assertNotFuture(date: string) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
   if (date > today) throw new Error("Attendance cannot be recorded for a future date.");
+}
+
+export function dateValue(date: string) {
+  return new Date(`${date}T00:00:00.000Z`);
 }
 
 export async function getFacultySubject(subjectId: string, facultyId: string, facultyDepartment?: string, facultyName?: string, isAdmin = false) {
