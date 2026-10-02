@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
 import connectToDatabase from "@/lib/db";
 import Assignment from "@/models/Assignment";
-import AssignmentSubmission from "@/models/AssignmentSubmission";
 import User from "@/models/User";
 import { requireAuth } from "@/lib/auth";
 import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
@@ -22,106 +21,42 @@ export async function GET(
 ) {
   const { id } = await params;
   const viewer = await requireAuth();
-
-  await connectToDatabase();
-
-  let assignment: any = null;
+  let assignment = store.getAssignmentById(id);
   try {
+    await connectToDatabase();
     const databaseAssignment = await Assignment.findOne({ id }).lean();
     if (databaseAssignment) {
-      assignment = {
+      const normalizedAssignment = {
         ...databaseAssignment,
         assignmentType: getAssignmentType(databaseAssignment.assignmentType),
-        allowedFileTypes:
-          databaseAssignment.allowedFileTypes ||
-          getAssignmentConfig(databaseAssignment.assignmentType).allowedFileTypes,
+        allowedFileTypes: databaseAssignment.allowedFileTypes || getAssignmentConfig(databaseAssignment.assignmentType).allowedFileTypes,
         maxFileSize: databaseAssignment.maxFileSize || 25 * 1024 * 1024,
-        maxFiles:
-          databaseAssignment.maxFiles ??
-          getAssignmentConfig(databaseAssignment.assignmentType).maxFiles,
+        maxFiles: databaseAssignment.maxFiles ?? getAssignmentConfig(databaseAssignment.assignmentType).maxFiles,
         deadline: databaseAssignment.deadline.toISOString(),
         createdAt: databaseAssignment.createdAt.toISOString(),
-      };
-      store.ensureAssignment(assignment);
+      } as any;
+      assignment = normalizedAssignment;
+      store.ensureAssignment(normalizedAssignment);
     }
   } catch (error) {
-    console.error("Assignment database detail read failed:", error);
+    console.error("Assignment database detail read failed; using local fallback.", error);
   }
-
-  if (!assignment) {
-    const storeAssign = store.getAssignmentById(id);
-    if (storeAssign) {
-      assignment = storeAssign;
-    }
-  }
-
   if (!assignment) {
     return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
   }
 
-  // 1. Fetch persistent submissions from MongoDB
-  let rawDbSubmissions: any[] = [];
-  try {
-    rawDbSubmissions = await AssignmentSubmission.find({ assignmentId: id })
-      .sort({ submittedAt: -1 })
-      .lean();
-  } catch (err) {
-    console.error("Failed to query AssignmentSubmission:", err);
-  }
-
-  // Fallback to store if DB has none (e.g. mock seed data)
-  if (rawDbSubmissions.length === 0) {
-    const storeSubs = store.getSubmissions(id);
-    if (storeSubs.length > 0) {
-      rawDbSubmissions = storeSubs.map((s) => ({
-        ...s,
-        submittedAt: new Date(s.submittedAt),
-        gradedAt: s.gradedAt ? new Date(s.gradedAt) : undefined,
-        evaluatedAt: s.evaluatedAt ? new Date(s.evaluatedAt) : s.gradedAt ? new Date(s.gradedAt) : undefined,
-      }));
-    }
-  }
-
-  const allSubmissions = rawDbSubmissions.map((s) => ({
-    id: s.id,
-    assignmentId: s.assignmentId,
-    studentId: s.studentId,
-    studentName: s.studentName,
-    studentRoll: s.studentRoll,
-    submittedAt: s.submittedAt instanceof Date ? s.submittedAt.toISOString() : String(s.submittedAt),
-    content: s.content,
-    fileName: s.fileName,
-    fileSize: s.fileSize,
-    fileUrl: s.fileUrl,
-    submissionType: s.submissionType,
-    files: s.files,
-    status: s.status,
-    marks: s.marks,
-    maxMarks: s.maxMarks,
-    feedback: s.feedback,
-    gradedAt: s.gradedAt instanceof Date ? s.gradedAt.toISOString() : s.gradedAt,
-    gradedBy: s.gradedBy,
-    evaluatedAt: s.evaluatedAt instanceof Date ? s.evaluatedAt.toISOString() : s.evaluatedAt || (s.gradedAt instanceof Date ? s.gradedAt.toISOString() : s.gradedAt),
-    evaluatedBy: s.evaluatedBy || s.gradedBy,
-    similarity: s.similarity,
-  }));
-
-  // Filter submissions by viewer role
-  const isFacultyOrAdmin = viewer.role === "FACULTY" || viewer.role === "ADMIN";
-  const visibleSubmissions = isFacultyOrAdmin
-    ? allSubmissions
-    : allSubmissions.filter((s) => s.studentId === viewer.id);
+  const submissions = store.getSubmissions(id).filter((submission) =>
+    viewer.role === "FACULTY" || viewer.role === "ADMIN" ? true : submission.studentId === viewer.id
+  );
 
   // Determine enrolled students from DB or fallback roster
   let enrolledStudents: any[] = [];
   try {
+    await connectToDatabase();
     const dbStudents = await User.find({
       role: { $in: ["STUDENT", "CR"] },
       status: "ACTIVE",
-    })
-      .select("name rollNumber email department semester")
-      .lean();
-
+    }).select("name rollNumber email department semester").lean();
     if (dbStudents && dbStudents.length > 0) {
       enrolledStudents = dbStudents.map((s: any) => ({
         id: s._id.toString(),
@@ -138,54 +73,38 @@ export async function GET(
     enrolledStudents = DEFAULT_CLASS_ROSTER;
   }
 
-  // Submitted student IDs & rolls across ALL submissions for this assignment
-  const submittedIds = new Set(allSubmissions.map((s) => s.studentId));
-  const submittedRolls = new Set(allSubmissions.map((s) => s.studentRoll));
+  // Submitted student IDs & rolls
+  const submittedIds = new Set(submissions.map((s) => s.studentId));
+  const submittedRolls = new Set(submissions.map((s) => s.studentRoll));
 
-  // Compute Not Submitted category from enrolled roster
+  // Compute Not Submitted category
   const notSubmittedStudents = enrolledStudents.filter(
     (student) => !submittedIds.has(student.id) && !submittedRolls.has(student.rollNumber)
   );
 
   // Categorize submissions
-  const pendingSubmissions = allSubmissions.filter(
-    (s) => s.status !== "graded" || s.marks === undefined
-  );
-  const evaluatedSubmissions = allSubmissions.filter(
-    (s) => s.status === "graded" && s.marks !== undefined
-  );
-  const lateSubmissions = allSubmissions.filter(
-    (s) =>
-      s.status === "late" ||
-      (s.submittedAt && new Date(s.submittedAt) > new Date(assignment.deadline))
+  const pendingSubmissions = submissions.filter((s) => s.status !== "graded" || s.marks === undefined);
+  const evaluatedSubmissions = submissions.filter((s) => s.status === "graded" && s.marks !== undefined);
+  const lateSubmissions = submissions.filter(
+    (s) => s.status === "late" || (s.submittedAt && new Date(s.submittedAt) > new Date(assignment!.deadline))
   );
 
   const totalScore = evaluatedSubmissions.reduce((acc, s) => acc + (s.marks || 0), 0);
-  const averageScore =
-    evaluatedSubmissions.length > 0
-      ? Math.round((totalScore / evaluatedSubmissions.length) * 10) / 10
-      : 0;
-  const progressPercentage =
-    allSubmissions.length > 0
-      ? Math.round((evaluatedSubmissions.length / allSubmissions.length) * 100)
-      : 0;
-
-  // Find viewer submission specifically for student view
-  const userSubmission = allSubmissions.find((s) => s.studentId === viewer.id) || null;
+  const averageScore = evaluatedSubmissions.length > 0 ? Math.round((totalScore / evaluatedSubmissions.length) * 10) / 10 : 0;
+  const progressPercentage = submissions.length > 0 ? Math.round((evaluatedSubmissions.length / submissions.length) * 100) : 0;
 
   return NextResponse.json({
     assignment,
-    submissionsCount: allSubmissions.length,
-    submissions: visibleSubmissions,
-    userSubmission,
+    submissionsCount: submissions.length,
+    submissions,
     categories: {
-      pending: isFacultyOrAdmin ? pendingSubmissions : pendingSubmissions.filter((s) => s.studentId === viewer.id),
-      evaluated: isFacultyOrAdmin ? evaluatedSubmissions : evaluatedSubmissions.filter((s) => s.studentId === viewer.id),
-      late: isFacultyOrAdmin ? lateSubmissions : lateSubmissions.filter((s) => s.studentId === viewer.id),
-      notSubmitted: isFacultyOrAdmin ? notSubmittedStudents : [],
+      pending: pendingSubmissions,
+      evaluated: evaluatedSubmissions,
+      late: lateSubmissions,
+      notSubmitted: notSubmittedStudents,
     },
     stats: {
-      totalReceived: allSubmissions.length,
+      totalReceived: submissions.length,
       pendingCount: pendingSubmissions.length,
       evaluatedCount: evaluatedSubmissions.length,
       lateCount: lateSubmissions.length,

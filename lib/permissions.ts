@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   // Administration
   MANAGE_USERS: ["ADMIN"] as RoleType[],
   MANAGE_SYSTEM: ["ADMIN"] as RoleType[],
+  MANAGE_FACULTY_SUBJECTS: ["ADMIN"] as RoleType[],
 };
 
 export function canSubmitAssignment(role: RoleType): boolean {
@@ -40,6 +41,10 @@ export function canUploadResource(role: RoleType): boolean {
 
 export function canManageAdmin(role: RoleType): boolean {
   return PERMISSIONS.MANAGE_SYSTEM.includes(role);
+}
+
+export function canManageFacultySubjects(role: RoleType): boolean {
+  return PERMISSIONS.MANAGE_FACULTY_SUBJECTS.includes(role);
 }
 
 export function getRoleDashboardPath(role: RoleType): string {

@@ -8,11 +8,44 @@ import { Subject } from "@/types";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const deptId = searchParams.get("deptId") || undefined;
-  const semNumber = searchParams.get("sem") ? Number(searchParams.get("sem")) : undefined;
+  const semParam = searchParams.get("sem") || searchParams.get("semesterNumber") || undefined;
+  const semNumber = semParam ? Number(semParam) : undefined;
 
   const departments = store.getDepartments();
   const semesters = store.getSemesters();
-  const subjects = store.getSubjects(deptId, semNumber);
+
+  let subjects: any[] = [];
+  try {
+    await connectToDatabase();
+    const { ensureSyllabusSubjectsInDB } = await import("@/lib/syllabus-catalog");
+    await ensureSyllabusSubjectsInDB();
+
+    const query: any = {};
+    if (deptId && deptId !== "ALL") {
+      const norm = deptId.replace(/^(dept-|department-)/i, "").toUpperCase();
+      query.$or = [
+        { departmentId: deptId },
+        { departmentId: `dept-${norm.toLowerCase()}` },
+        { departmentId: norm },
+      ];
+    }
+    if (semNumber && !isNaN(semNumber)) {
+      query.semesterNumber = semNumber;
+    }
+
+    const dbSubjects = await SubjectModel.find(query).sort({ code: 1 }).lean();
+    if (dbSubjects && dbSubjects.length > 0) {
+      subjects = dbSubjects.map((s: any) => ({
+        ...s,
+        _id: s._id ? s._id.toString() : s.id,
+      }));
+    } else {
+      subjects = store.getSubjects(deptId, semNumber);
+    }
+  } catch {
+    subjects = store.getSubjects(deptId, semNumber);
+  }
+
   const modules = store.getModules();
 
   return NextResponse.json({

@@ -17,9 +17,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import FacultyModal, { FacultyData, BranchOption } from "./FacultyModal";
+import FacultySubjectModal from "./FacultySubjectModal";
 import AdminNavigation from "../AdminNavigation";
 
 export default function FacultyManagement() {
@@ -36,6 +38,14 @@ export default function FacultyManagement() {
   const [availableBranches, setAvailableBranches] = useState<BranchOption[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [facultyToEdit, setFacultyToEdit] = useState<FacultyData | null>(null);
+
+  const [subjectModalOpen, setSubjectModalOpen] = useState(false);
+  const [facultyForSubjects, setFacultyForSubjects] = useState<FacultyData | null>(null);
+
+  const openSubjectModal = (faculty: FacultyData) => {
+    setFacultyForSubjects(faculty);
+    setSubjectModalOpen(true);
+  };
 
   // Fetch branches for filter
   useEffect(() => {
@@ -335,6 +345,15 @@ export default function FacultyManagement() {
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
+                            onClick={() => openSubjectModal(faculty)}
+                            title="Manage Teaching Subjects"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg transition-colors cursor-pointer mr-1"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>Manage Subjects</span>
+                          </button>
+
+                          <button
                             onClick={() => openEditModal(faculty)}
                             title="Edit Faculty Member"
                             className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
@@ -396,6 +415,15 @@ export default function FacultyManagement() {
         onClose={() => setModalOpen(false)}
         facultyToEdit={facultyToEdit}
         onSuccess={fetchFaculty}
+      />
+
+      {/* Super Admin Teaching Subject Assignment Modal */}
+      <FacultySubjectModal
+        isOpen={subjectModalOpen}
+        onClose={() => setSubjectModalOpen(false)}
+        faculty={facultyForSubjects}
+        availableBranches={availableBranches}
+        onAssignmentChanged={fetchFaculty}
       />
     </div>
   );

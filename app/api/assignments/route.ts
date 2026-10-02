@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { store } from "@/lib/store";
 import { Assignment } from "@/types";
-import { requireRole } from "@/lib/auth";
+import { requireRole, getCurrentUser } from "@/lib/auth";
 import connectToDatabase from "@/lib/db";
 import AssignmentModel from "@/models/Assignment";
 import AssignmentSubmission from "@/models/AssignmentSubmission";
+import FacultySubject from "@/models/FacultySubject";
+import SubjectModel from "@/models/Subject";
 import { createAssignmentNotification } from "@/lib/services/notification.service";
 import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
+import { CANONICAL_SYLLABUS_SUBJECTS } from "@/lib/syllabus-catalog";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -18,15 +21,38 @@ export async function GET(req: NextRequest) {
   const facultyId = searchParams.get("facultyId") || undefined;
 
   let rawAssignments: any[] = [];
-  let dbSubmissionsMap: Record<string, any[]> = {};
+  const dbSubmissionsMap: Record<string, any[]> = {};
 
   try {
+    const viewer = await getCurrentUser();
     await connectToDatabase();
+
     const query: any = {};
     if (subjectId) query.subjectId = subjectId;
-    if (departmentId) query.departmentId = departmentId;
+    if (departmentId && departmentId !== "ALL") {
+      const norm = departmentId.replace(/^(dept-|department-)/i, "").toUpperCase();
+      query.$or = [
+        { departmentId },
+        { departmentId: `dept-${norm.toLowerCase()}` },
+        { departmentId: norm },
+      ];
+    }
     if (semesterNumber) query.semesterNumber = semesterNumber;
     if (facultyId) query.facultyId = facultyId;
+
+    // Student Targeting: Students & CRs only see coursework for their department & semester
+    if (viewer && (viewer.role === "STUDENT" || viewer.role === "CR")) {
+      const studentDept = (viewer.department || "").replace(/^(dept-|department-)/i, "").toUpperCase();
+      if (studentDept) {
+        query.$or = [
+          { departmentId: `dept-${studentDept.toLowerCase()}` },
+          { departmentId: studentDept },
+        ];
+      }
+      if (viewer.semester) {
+        query.semesterNumber = viewer.semester;
+      }
+    }
 
     const dbAssignments = await AssignmentModel.find(query).sort({ deadline: 1 }).lean();
     if (dbAssignments && dbAssignments.length > 0) {
@@ -85,7 +111,6 @@ export async function GET(req: NextRequest) {
     // Enrich with live database submission & evaluation statistics
     const enrichedAssignments = rawAssignments.map((assign) => {
       let subs = dbSubmissionsMap[assign.id];
-      // Fall back to store if no DB submissions for this assignment yet
       if (!subs || subs.length === 0) {
         subs = store.getSubmissions(assign.id);
       }
@@ -109,7 +134,7 @@ export async function GET(req: NextRequest) {
       const progressPercentage =
         totalSubmissions > 0 ? Math.round((evaluatedCount / totalSubmissions) * 100) : 0;
 
-      const deptCode = (assign.departmentId || "").replace("dept-", "").toUpperCase();
+      const deptCode = (assign.departmentId || "").replace(/^(dept-|department-)/i, "").toUpperCase();
       const enrolledForAssignment = activeStudents.filter((st: any) => {
         if (assign.semesterNumber && st.semester && st.semester !== assign.semesterNumber) {
           return false;
@@ -201,13 +226,36 @@ export async function POST(req: NextRequest) {
 
     await connectToDatabase();
 
-    // Check subject from DB or store
-    let subject: any = null;
-    try {
-      const SubjectModel = (await import("@/models/Subject")).default;
-      subject = await SubjectModel.findOne({ id: subjectId }).lean();
-    } catch {}
+    // 1. BACKEND AUTHORIZATION ENFORCEMENT:
+    // When faculty submits, verify faculty has an ACTIVE faculty-subject assignment for this subject
+    let activeAssignment: any = null;
+    if (faculty.role === "FACULTY") {
+      activeAssignment = await FacultySubject.findOne({
+        facultyId: faculty.id,
+        subjectId,
+        status: "ACTIVE",
+      }).lean();
 
+      if (!activeAssignment) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "You are not assigned to this subject.",
+            error: "You are not assigned to this subject.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // 2. Fetch subject details from SubjectModel or canonical syllabus
+    let subject: any = await SubjectModel.findOne({ id: subjectId }).lean();
+    if (!subject) {
+      const canonical = CANONICAL_SYLLABUS_SUBJECTS.find((s) => s.id === subjectId);
+      if (canonical) {
+        subject = canonical;
+      }
+    }
     if (!subject) {
       subject = store.getSubjectById(subjectId);
     }
@@ -215,6 +263,13 @@ export async function POST(req: NextRequest) {
     if (!subject) {
       return NextResponse.json({ error: "Subject not found." }, { status: 404 });
     }
+
+    // 3. AUTOMATICALLY INHERIT ACADEMIC CONTEXT:
+    // Department, Semester, and Subject are inherited from the active assignment / subject entity
+    const departmentId = activeAssignment?.departmentId || subject.departmentId;
+    const semesterNumber = activeAssignment?.semesterNumber || subject.semesterNumber;
+    const subjectCode = activeAssignment?.subjectCode || subject.code;
+    const subjectName = activeAssignment?.subjectName || subject.name;
 
     const modules = subject.modules || store.getModules(subject.id);
     const mod = modules.find((m: any) => m.id === moduleId) || modules[0] || {
@@ -227,14 +282,14 @@ export async function POST(req: NextRequest) {
     const newAssignment: Assignment = {
       id: `assign-${Date.now()}`,
       title,
-      description: description || `Course assignment for ${subject.name}`,
+      description: description || `Course assignment for ${subjectName}`,
       subjectId: subject.id,
-      subjectCode: subject.code,
-      subjectName: subject.name,
+      subjectCode,
+      subjectName,
       moduleId: mod.id,
       moduleTitle: mod.title,
-      departmentId: subject.departmentId,
-      semesterNumber: subject.semesterNumber,
+      departmentId,
+      semesterNumber,
       facultyId: faculty.id,
       facultyName: faculty.name,
       totalMarks: Number(totalMarks),
