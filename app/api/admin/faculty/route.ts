@@ -5,12 +5,15 @@ import connectToDatabase from "@/lib/db";
 import User from "@/models/User";
 import Branch from "@/models/Branch";
 import { hashPassword, requireRole } from "@/lib/auth";
+import FacultySubject from "@/models/FacultySubject";
+import { syncFacultySubjects } from "@/lib/faculty-subject-assignments";
 
 const CreateFacultySchema = z.object({
   name: z.string().trim().min(2, "Full Name must be at least 2 characters").max(80),
   email: z.string().trim().email("Please provide a valid email address").toLowerCase(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   branchIds: z.array(z.string().min(1)).min(1, "Please assign at least one department/branch"),
+  subjectIds: z.array(z.string().min(1)).default([]),
   designation: z.string().trim().max(100).optional().default("Assistant Professor"),
   title: z.string().trim().max(100).optional().default(""),
   officeLocation: z.string().trim().max(100).optional().default(""),
@@ -67,6 +70,17 @@ export async function GET(req: NextRequest) {
       User.countDocuments(query),
     ]);
 
+    const activeSubjectAssignments = await FacultySubject.find({
+      facultyId: { $in: facultyList.map((faculty: any) => faculty._id.toString()) },
+      status: "ACTIVE",
+    }).lean();
+    const assignmentsByFaculty = new Map<string, any[]>();
+    activeSubjectAssignments.forEach((assignment: any) => {
+      const list = assignmentsByFaculty.get(assignment.facultyId) || [];
+      list.push(assignment);
+      assignmentsByFaculty.set(assignment.facultyId, list);
+    });
+
     const formatted = facultyList.map((f: any) => {
       const branchMap = new Map<string, any>();
       if (Array.isArray(f.branchIds)) {
@@ -90,6 +104,7 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      const assignedSubjects = assignmentsByFaculty.get(f._id.toString()) || [];
       return {
         id: f._id.toString(),
         name: f.name,
@@ -98,6 +113,16 @@ export async function GET(req: NextRequest) {
         status: f.status,
         department: f.department,
         branches: Array.from(branchMap.values()),
+        assignedSubjectIds: assignedSubjects.map((subject) => subject.subjectId),
+        assignedSubjects: assignedSubjects.map((subject) => ({
+          id: subject.id,
+          subjectId: subject.subjectId,
+          subjectCode: subject.subjectCode,
+          subjectName: subject.subjectName,
+          branchCode: subject.branchCode,
+          semesterNumber: subject.semesterNumber,
+        })),
+        assignedSubjectsCount: assignedSubjects.length,
         facultyProfile: f.facultyProfile || {
           designation: "Assistant Professor",
           officeLocation: "",
@@ -143,6 +168,7 @@ export async function POST(req: NextRequest) {
       email,
       password,
       branchIds,
+      subjectIds,
       designation,
       title,
       officeLocation,
@@ -204,6 +230,20 @@ export async function POST(req: NextRequest) {
         bio,
       },
     });
+
+    try {
+      await syncFacultySubjects({
+        facultyId: newFaculty._id.toString(),
+        facultyName: newFaculty.name,
+        facultyEmail: newFaculty.email,
+        branchIds,
+        subjectIds,
+        assignedBy: "Super Admin",
+      });
+    } catch (error) {
+      await User.deleteOne({ _id: newFaculty._id });
+      throw error;
+    }
 
     return NextResponse.json(
       {

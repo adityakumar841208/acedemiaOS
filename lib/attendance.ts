@@ -1,5 +1,6 @@
 import { SubjectModel } from "@/models/Subject";
 import User from "@/models/User";
+import FacultySubject from "@/models/FacultySubject";
 
 export function normalizeDepartment(value?: string) {
   return (value || "").toLowerCase().replace(/^(dept-|department-)/, "").trim();
@@ -32,9 +33,11 @@ export function dateValue(date: string) {
 export async function getFacultySubject(subjectId: string, facultyId: string, facultyDepartment?: string, facultyName?: string, isAdmin = false) {
   const subject = await SubjectModel.findOne({ id: subjectId }).lean();
   if (!subject) throw new Error("Subject not found.");
-  const departmentMatches = normalizeDepartment(subject.departmentId) === normalizeDepartment(facultyDepartment);
-  const hasExplicitFaculty = Boolean(subject.facultyId || subject.facultyName);
-  const assigned = isAdmin || subject.facultyId === facultyId || subject.facultyName === facultyName || (!hasExplicitFaculty && departmentMatches);
+  const assigned = isAdmin || Boolean(await FacultySubject.exists({
+    facultyId,
+    subjectId,
+    status: "ACTIVE",
+  }));
   if (!assigned) throw new Error("You are not authorized to manage attendance for this subject.");
   return subject;
 }

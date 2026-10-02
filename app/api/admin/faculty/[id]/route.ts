@@ -5,11 +5,14 @@ import connectToDatabase from "@/lib/db";
 import User from "@/models/User";
 import Branch from "@/models/Branch";
 import { requireRole } from "@/lib/auth";
+import { syncFacultySubjects } from "@/lib/faculty-subject-assignments";
+import FacultySubject from "@/models/FacultySubject";
 
 const UpdateFacultySchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   status: z.enum(["ACTIVE", "SUSPENDED", "PENDING", "REJECTED"]).optional(),
   branchIds: z.array(z.string().min(1)).min(1, "At least one branch must remain assigned").optional(),
+  subjectIds: z.array(z.string().min(1)).optional(),
   facultyProfile: z
     .object({
       designation: z.string().trim().max(100).optional(),
@@ -133,6 +136,22 @@ export async function PATCH(
         ...(existing.facultyProfile || {}),
         ...validated.data.facultyProfile,
       };
+    }
+
+    if (validated.data.subjectIds !== undefined || validated.data.branchIds !== undefined) {
+      const branchIds = validated.data.branchIds || (Array.isArray(existing.branchIds) ? existing.branchIds.map((branchId: any) => branchId.toString()) : []);
+      const currentSubjectIds = validated.data.subjectIds || await FacultySubject.find({
+        facultyId: existing._id.toString(),
+        status: "ACTIVE",
+      }).distinct("subjectId");
+      await syncFacultySubjects({
+        facultyId: existing._id.toString(),
+        facultyName: validated.data.name?.trim() || existing.name,
+        facultyEmail: existing.email,
+        branchIds,
+        subjectIds: currentSubjectIds,
+        assignedBy: "Super Admin",
+      });
     }
 
     const updated = await User.findByIdAndUpdate(id, updateData, { new: true })

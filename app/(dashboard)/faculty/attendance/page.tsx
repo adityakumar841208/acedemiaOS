@@ -1,98 +1,169 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, CheckCircle2, Download, FileSpreadsheet, History, RotateCcw, Save, Users, X } from "lucide-react";
+import Link from "next/link";
+import { Check, Download, FileSpreadsheet, History, Lock, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useUserSession } from "@/context/UserContext";
 
-type Mode = "present" | "absent";
-type Subject = { id: string; code: string; name: string; semesterNumber: number };
-type Student = { id: string; name: string; rollNumber: string };
-type Session = { _id: string; subjectId: string; date: string; dayType?: "attendance" | "holiday"; holidayName?: string; records: Array<{ studentId: string; status: Mode }>; subject?: { code: string; name: string } };
-type Preview = { date: string; dayType?: "attendance" | "holiday"; holidayName?: string; studentsFound: number; present: number; absent: number; errors: string[]; records: Array<{ studentId: string; name: string; rollNumber: string; status: Mode }> };
+type Status = "present" | "absent";
+type Subject = { id: string; code: string; name: string; semesterNumber: number; departmentId: string };
+type Student = { id: string; name: string; rollNumber: string; department?: string; semester?: number };
+type Session = { date: string; dayType?: "attendance" | "holiday"; holidayName?: string; records: Array<{ studentId: string; status: Status }> };
+type CellMap = Record<string, Record<string, Status>>;
+type ImportPreview = { entries: Array<{ date: string; type?: "holiday"; holidayName?: string; records?: Array<{ studentId: string; status: Status }> }>; errors: string[] };
 
 const today = () => new Date().toISOString().slice(0, 10);
+const monthRange = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, "0")}` };
+};
+const dateLabel = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, { day: "2-digit", weekday: "short" });
 
 export default function FacultyAttendancePage() {
   const { isFaculty, isAdmin } = useUserSession();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectId, setSubjectId] = useState("");
-  const [date, setDate] = useState(today);
+  const [month, setMonth] = useState(() => today().slice(0, 7));
   const [students, setStudents] = useState<Student[]>([]);
-  const [existing, setExisting] = useState<Session | null>(null);
-  const [mode, setMode] = useState<Mode>("present");
-  const [dayType, setDayType] = useState<"attendance" | "holiday">("attendance");
-  const [holidayName, setHolidayName] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [history, setHistory] = useState<Session[]>([]);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [cells, setCells] = useState<CellMap>({});
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
+  const [dirtyDates, setDirtyDates] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [unlockedDates, setUnlockedDates] = useState<Set<string>>(new Set());
+
+  const dates = useMemo(() => {
+    const { from, to } = monthRange(month);
+    const result: string[] = [];
+    for (let cursor = new Date(`${from}T00:00:00Z`); cursor <= new Date(`${to}T00:00:00Z`); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+      result.push(cursor.toISOString().slice(0, 10));
+    }
+    return result;
+  }, [month]);
+
+  const selectedSubject = subjects.find((subject) => subject.id === subjectId);
+  const registerRange = monthRange(month);
+  const templateUrl = `/api/attendance/template?${new URLSearchParams({ subjectId, from: registerRange.from, to: registerRange.to }).toString()}`;
 
   const loadSubjects = async () => {
-    const res = await fetch("/api/attendance?view=subjects");
-    if (!res.ok) throw new Error("Unable to load your teaching subjects.");
-    const data = await res.json();
+    const response = await fetch("/api/attendance?view=subjects");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load assigned subjects.");
     setSubjects(data.subjects || []);
     if (!subjectId && data.subjects?.[0]) setSubjectId(data.subjects[0].id);
   };
 
-  const loadClass = async () => {
+  const loadRegister = async () => {
     if (!subjectId) return;
-    const res = await fetch(`/api/attendance?view=students&subjectId=${subjectId}&date=${date}`);
-    if (!res.ok) throw new Error((await res.json()).error || "Unable to load the class roster.");
-    const data = await res.json();
-    setStudents(data.students || []);
-    setExisting(data.attendance || null);
-    setDayType(data.attendance?.dayType || "attendance");
-    setHolidayName(data.attendance?.holidayName || "");
-    const target = mode;
-    setSelected(new Set((data.attendance?.records || []).filter((record: any) => record.status === target).map((record: any) => record.studentId)));
-  };
-
-  const loadHistory = async () => {
-    const res = await fetch("/api/attendance?view=history");
-    if (res.ok) setHistory((await res.json()).sessions || []);
+    const { from, to } = monthRange(month);
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/attendance?view=register&subjectId=${encodeURIComponent(subjectId)}&from=${from}&to=${to}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load attendance register.");
+      const nextCells: CellMap = {};
+      const nextHolidays: Record<string, string> = {};
+      (data.sessions || []).forEach((session: Session) => {
+        const date = session.date.slice(0, 10);
+        if (session.dayType === "holiday") nextHolidays[date] = session.holidayName || "Holiday";
+        else nextCells[date] = Object.fromEntries(session.records.map((record) => [record.studentId, record.status]));
+      });
+      setStudents(data.students || []);
+      setSessions(data.sessions || []);
+      setCells(nextCells);
+      setHolidays(nextHolidays);
+      setDirtyDates(new Set());
+      setUnlockedDates(new Set());
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    Promise.all([loadSubjects(), loadHistory()]).catch((error) => toast.error(error.message)).finally(() => setLoading(false));
+    loadSubjects().catch((error) => toast.error(error.message)).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    loadClass().catch((error) => toast.error(error.message));
-  }, [subjectId, date]);
+    loadRegister();
+  }, [subjectId, month]);
 
-  const counts = useMemo(() => ({
-    selected: selected.size,
-    present: mode === "present" ? selected.size : students.length - selected.size,
-    absent: mode === "absent" ? selected.size : students.length - selected.size,
-  }), [mode, selected, students.length]);
+  const isDateLocked = (date: string) =>
+    sessions.some((session) => session.date.slice(0, 10) === date) && !unlockedDates.has(date);
 
-  const setModeAndSelection = (nextMode: Mode) => {
-    setMode(nextMode);
-    const current = existing?.records || [];
-    setSelected(new Set(current.filter((record) => record.status === nextMode).map((record) => record.studentId)));
-  };
-
-  const toggleStudent = (studentId: string) => {
-    setSelected((current) => {
+  const toggleDateLock = (date: string) => {
+    setUnlockedDates((current) => {
       const next = new Set(current);
-      if (next.has(studentId)) next.delete(studentId);
-      else next.add(studentId);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
       return next;
     });
   };
 
-  const saveRecords = async (records: Array<{ studentId: string; status: Mode }>) => {
+  const updateCell = (date: string, studentId: string) => {
+    if (holidays[date] || date > today() || isDateLocked(date)) return;
+    setCells((current) => ({ ...current, [date]: { ...current[date], [studentId]: current[date]?.[studentId] === "present" ? "absent" : "present" } }));
+    setDirtyDates((current) => new Set(current).add(date));
+  };
+
+  const markDate = (date: string, status: Status) => {
+    if (holidays[date] || date > today() || isDateLocked(date)) return;
+    setCells((current) => ({ ...current, [date]: Object.fromEntries(students.map((student) => [student.id, status])) }));
+    setDirtyDates((current) => new Set(current).add(date));
+  };
+
+  const toggleHoliday = (date: string) => {
+    if (date > today() || isDateLocked(date)) return;
+    if (holidays[date]) {
+      setHolidays((current) => {
+        const next = { ...current };
+        delete next[date];
+        return next;
+      });
+      setCells((current) => ({
+        ...current,
+        [date]: Object.fromEntries(students.map((student) => [student.id, "absent"])),
+      }));
+      setDirtyDates((current) => new Set(current).add(date));
+      return;
+    }
+    const name = window.prompt("Holiday name", holidays[date] || "Holiday");
+    if (!name) return;
+    setHolidays((current) => ({ ...current, [date]: name }));
+    setCells((current) => { const next = { ...current }; delete next[date]; return next; });
+    setDirtyDates((current) => new Set(current).add(date));
+  };
+
+  const importRegister = async (file: File) => {
+    if (!subjectId) {
+      toast.error("Select an assigned subject first.");
+      return;
+    }
     setSaving(true);
     try {
-      const res = await fetch("/api/attendance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subjectId, date, records, dayType, holidayName }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to save attendance.");
-      toast.success(existing ? "Attendance updated." : "Attendance saved.");
-      setExisting(data.session);
-      await loadHistory();
+      const form = new FormData();
+      form.append("subjectId", subjectId);
+      form.append("file", file);
+      const previewResponse = await fetch("/api/attendance/import", { method: "POST", body: form });
+      const previewData = await previewResponse.json();
+      if (!previewResponse.ok) throw new Error(previewData.error || "Unable to read attendance register.");
+      const preview = previewData.preview as ImportPreview;
+      if (preview.errors.length) {
+        throw new Error(`${preview.errors.length} import issue${preview.errors.length === 1 ? "" : "s"}: ${preview.errors[0]}`);
+      }
+      const saveResponse = await fetch("/api/attendance", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectId, entries: preview.entries }),
+      });
+      const saveData = await saveResponse.json();
+      if (!saveResponse.ok) throw new Error(saveData.error || "Unable to save imported attendance.");
+      toast.success(`${preview.entries.length} date${preview.entries.length === 1 ? "" : "s"} imported and locked.`);
+      await loadRegister();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -100,86 +171,47 @@ export default function FacultyAttendancePage() {
     }
   };
 
-  const handleSave = () => saveRecords(students.map((student) => ({ studentId: student.id, status: selected.has(student.id) ? mode : mode === "present" ? "absent" : "present" })));
+  const saveChanges = async () => {
+    if (!dirtyDates.size || !subjectId) return;
+    setSaving(true);
+    try {
+      const entries = Array.from(dirtyDates).map((date) => holidays[date]
+        ? { date, type: "holiday", holidayName: holidays[date] }
+        : { date, records: students.map((student) => ({ studentId: student.id, status: cells[date]?.[student.id] || "absent" })) });
+      const response = await fetch("/api/attendance", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ subjectId, entries }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to save attendance register.");
+      toast.success(`${entries.length} date${entries.length === 1 ? "" : "s"} saved.`);
+      await loadRegister();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  const handleImport = async (file: File) => {
-    const form = new FormData();
-    form.append("subjectId", subjectId);
-    form.append("date", date);
-    form.append("file", file);
-    const res = await fetch("/api/attendance/import", { method: "POST", body: form });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Unable to preview the workbook.");
-    setPreview(data.preview);
-    setDate(data.preview.date);
-    setDayType(data.preview.dayType || "attendance");
-    setHolidayName(data.preview.holidayName || "");
+  const summary = (studentId: string) => {
+    const workingDates = dates.filter((date) => !holidays[date] && date <= today() && sessions.some((session) => session.date.slice(0, 10) === date && session.dayType !== "holiday"));
+    const present = workingDates.filter((date) => cells[date]?.[studentId] === "present").length;
+    const absent = workingDates.filter((date) => cells[date]?.[studentId] === "absent").length;
+    const total = present + absent;
+    return { present, absent, total, percentage: total ? Math.round((present / total) * 1000) / 10 : 0 };
   };
 
   if (!isFaculty && !isAdmin) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-800">Faculty access is required.</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-600">Faculty workspace</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Attendance</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">Mark a class in seconds. One session per subject, class, and date.</p>
-        </div>
-        <a href="/api/attendance/template" className="inline-flex items-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-          <Download className="h-4 w-4" /> Download Excel template
-        </a>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-600">Faculty workspace</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Attendance Register</h1><p className="mt-1 max-w-2xl text-sm text-slate-500">A date-column register for fast daily and monthly class marking.</p></div>
+        <div className="flex flex-wrap gap-2"><Link href="/faculty/attendance/history" className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"><History className="h-4 w-4" /> History</Link><a href={subjectId ? templateUrl : undefined} aria-disabled={!subjectId} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${subjectId ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50" : "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"}`}><Download className="h-4 w-4" /> Template</a><label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${subjectId ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : "pointer-events-none border-slate-200 bg-slate-100 text-slate-400"}`}><FileSpreadsheet className="h-4 w-4" /> Import Register<input type="file" accept=".xlsx" className="sr-only" disabled={!subjectId || saving} onChange={(event) => { const file = event.target.files?.[0]; if (file) importRegister(file); event.currentTarget.value = ""; }} /></label></div>
       </header>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
-            <label className="text-xs font-semibold text-slate-700">Subject
-              <select value={subjectId} onChange={(event) => setSubjectId(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-amber-500" disabled={loading}>
-                <option value="">Select a subject</option>
-                {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name}</option>)}
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-700">Date
-              <input type="date" value={date} max={today()} onChange={(event) => setDate(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-amber-500" />
-            </label>
-          </div>
-
-          {existing && <div className="mt-5 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900"><CheckCircle2 className="h-4 w-4" /> Attendance already exists for this date. Saving will update it.</div>}
-
-          <div className="mt-5 flex gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Attendance day type">
-            {(["attendance", "holiday"] as const).map((value) => <button key={value} type="button" onClick={() => setDayType(value)} className={`flex-1 rounded-md px-3 py-2 text-xs font-semibold capitalize ${dayType === value ? value === "holiday" ? "bg-amber-500 text-white" : "bg-slate-900 text-white" : "text-slate-600 hover:bg-white"}`}>{value}</button>)}
-          </div>
-          {dayType === "holiday" && <label className="mt-4 block text-xs font-semibold text-slate-700">Holiday name<input value={holidayName} onChange={(event) => setHolidayName(event.target.value)} placeholder="Optional holiday name" maxLength={160} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900" /></label>}
-
-          {dayType === "attendance" && <div className="mt-6 flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-semibold text-slate-900">Quick marking</h2>
-              <p className="mt-1 text-xs text-slate-500">{mode === "present" ? "Selected students are present; everyone else is absent." : "Selected students are absent; everyone else is present."}</p>
-            </div>
-            <div className="flex rounded-lg border border-slate-300 bg-slate-50 p-1" role="group" aria-label="Attendance mode">
-              {(["present", "absent"] as Mode[]).map((value) => <button key={value} type="button" onClick={() => setModeAndSelection(value)} className={`rounded-md px-3 py-2 text-xs font-semibold capitalize ${mode === value ? value === "present" ? "bg-emerald-600 text-white" : "bg-rose-600 text-white" : "text-slate-600 hover:bg-white"}`}>{value === "present" ? "Mark present" : "Mark absent"}</button>)}
-            </div>
-          </div>}
-
-          {dayType === "attendance" && <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3 text-sm font-semibold text-slate-900"><span>{counts.present} present</span><span className="text-slate-300">·</span><span>{counts.absent} absent</span></div>
-            <div className="flex gap-2"><button type="button" onClick={() => setSelected(new Set(students.map((student) => student.id)))} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Select all</button><button type="button" onClick={() => setSelected(new Set())} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Clear all</button></div>
-          </div>}
-
-          {dayType === "attendance" && <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
-            {students.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No active students were found for this subject.</p> : students.map((student) => <button key={student.id} type="button" onClick={() => toggleStudent(student.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-500"><span className={`flex h-6 w-6 items-center justify-center rounded-md border ${selected.has(student.id) ? mode === "present" ? "border-emerald-600 bg-emerald-600 text-white" : "border-rose-600 bg-rose-600 text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-sm font-medium text-slate-900">{student.name}</span><span className="block text-xs text-slate-500">{student.rollNumber}</span></span><span className="text-xs font-medium text-slate-400">{selected.has(student.id) ? mode : mode === "present" ? "absent" : "present"}</span></button>)}
-          </div>}
-          <button type="button" disabled={saving || !subjectId || (dayType === "attendance" && students.length === 0) || (dayType === "holiday" && !holidayName.trim())} onClick={handleSave} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Saving attendance..." : dayType === "holiday" ? "Mark holiday" : existing ? "Update attendance" : "Save attendance"}</button>
-        </div>
-
-        <aside className="space-y-5">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-slate-900"><FileSpreadsheet className="h-4 w-4 text-amber-600" /> Import Excel</div><p className="mt-2 text-xs leading-relaxed text-slate-500">Upload the template, preview every row, then confirm. Invalid or incomplete files are never saved.</p><label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"><FileSpreadsheet className="h-4 w-4" /> Choose .xlsx<input type="file" accept=".xlsx" className="sr-only" onChange={(event) => event.target.files?.[0] && handleImport(event.target.files[0]).catch((error) => toast.error(error.message))} /></label></div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2 font-semibold text-slate-900"><History className="h-4 w-4 text-indigo-600" /> Recent sessions</div><div className="mt-3 space-y-2">{history.slice(0, 6).map((session) => <button type="button" key={session._id} onClick={() => { setSubjectId(session.subjectId); setDate(new Date(session.date).toISOString().slice(0, 10)); }} className="flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left text-xs hover:bg-indigo-50"><span><span className="block font-medium text-slate-700">{session.subject?.code || "Subject"}</span><span className="text-slate-500">{new Date(session.date).toLocaleDateString()}</span></span><span className="text-slate-500">{session.records.filter((record) => record.status === "present").length}/{session.records.length}</span></button>)}{history.length === 0 && <p className="text-xs text-slate-500">No attendance sessions yet.</p>}</div></div>
-        </aside>
-      </section>
-
-      {preview && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-amber-600">Import preview</p><h2 className="mt-1 text-xl font-bold text-slate-900">Review before saving</h2><p className="mt-1 text-xs text-slate-500">{preview.studentsFound} students found · {preview.present} present · {preview.absent} absent</p></div><button type="button" onClick={() => setPreview(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close preview"><X className="h-5 w-5" /></button></div>{preview.errors.length > 0 && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800"><p className="font-semibold">{preview.errors.length} records need attention</p><ul className="mt-2 list-disc space-y-1 pl-4">{preview.errors.slice(0, 8).map((error) => <li key={error}>{error}</li>)}</ul></div>}<div className="mt-4 max-h-80 overflow-auto rounded-xl border border-slate-200"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-100 text-slate-500"><tr><th className="px-3 py-2">Roll</th><th className="px-3 py-2">Student</th><th className="px-3 py-2">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{preview.records.map((record) => <tr key={record.studentId}><td className="px-3 py-2 font-mono">{record.rollNumber}</td><td className="px-3 py-2">{record.name}</td><td className={`px-3 py-2 font-semibold ${record.status === "present" ? "text-emerald-700" : "text-rose-700"}`}>{record.status}</td></tr>)}</tbody></table></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setPreview(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">Cancel</button><button type="button" disabled={preview.errors.length > 0 || saving} onClick={() => { saveRecords(preview.records.map(({ studentId, status }) => ({ studentId, status }))).then(() => setPreview(null)); }} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">Confirm & save</button></div></div></div>}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr)_220px_auto] md:items-end"><label className="text-xs font-semibold text-slate-700">Assigned subject<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"><option value="">Select a subject</option>{subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.code} · {subject.name} · Sem {subject.semesterNumber}</option>)}</select></label><label className="text-xs font-semibold text-slate-700">Register month<input type="month" value={month} max={today().slice(0, 7)} onChange={(event) => setMonth(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:ring-2 focus:ring-amber-500" /></label><button type="button" onClick={saveChanges} disabled={saving || !dirtyDates.size} className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"><Save className="h-4 w-4" />{saving ? "Saving..." : `Save ${dirtyDates.size || ""} date${dirtyDates.size === 1 ? "" : "s"}`}</button></div>{selectedSubject && <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500"><span className="font-semibold text-slate-900">{selectedSubject.code}</span><span>·</span><span>{selectedSubject.departmentId.replace(/^dept-/i, "").toUpperCase()}</span><span>·</span><span>Semester {selectedSubject.semesterNumber}</span><span className="ml-auto">P Present · A Absent · H Holiday</span></div>}</section>
+ 
+  <section className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm"><div className="overflow-x-auto"><table className="min-w-max border-collapse text-xs"><thead><tr className="bg-slate-900 text-white"><th className="sticky left-0 z-30 w-20 border-r border-slate-700 bg-slate-900 px-3 py-3 text-left">Roll No.</th><th className="sticky left-20 z-30 w-56 border-r border-slate-700 bg-slate-900 px-3 py-3 text-left">Student Name</th>{dates.map((date) => <th key={date} className="w-20 border-r border-slate-700 px-2 py-2 text-center font-semibold"><span className="block">{dateLabel(date)}</span><div className="mt-2 flex justify-center gap-1"><button type="button" onClick={() => markDate(date, "present")} disabled={date > today() || Boolean(holidays[date]) || isDateLocked(date)} className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] hover:bg-emerald-500 disabled:opacity-40">P all</button><button type="button" onClick={() => markDate(date, "absent")} disabled={date > today() || Boolean(holidays[date]) || isDateLocked(date)} className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] hover:bg-rose-500 disabled:opacity-40">A all</button><button type="button" onClick={() => toggleHoliday(date)} disabled={date > today() || isDateLocked(date)} className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] hover:bg-amber-400 disabled:opacity-40">{holidays[date] ? "Clear H" : "H"}</button><button type="button" onClick={() => toggleDateLock(date)} className="rounded bg-slate-600 px-1.5 py-0.5 text-[10px] hover:bg-slate-500"><Lock className="inline h-3 w-3" /> {isDateLocked(date) ? "Unlock" : "Lock"}</button></div></th>)}<th className="sticky right-0 z-30 w-56 bg-slate-900 px-3 py-3 text-left">Summary</th></tr></thead><tbody className="divide-y divide-slate-200">{students.map((student, index) => { const stats = summary(student.id); return <tr key={student.id} className="hover:bg-amber-50/40"><td className="sticky left-0 z-20 border-r border-slate-200 bg-white px-3 py-3 font-mono font-semibold text-slate-700">{student.rollNumber || String(index + 1).padStart(2, "0")}</td><td className="sticky left-20 z-20 border-r border-slate-200 bg-white px-3 py-3 font-semibold text-slate-900">{student.name}</td>{dates.map((date) => { const value = holidays[date] ? "H" : cells[date]?.[student.id]; return <td key={date} className={`border-r border-slate-100 p-1 text-center ${date > today() ? "bg-slate-50" : ""}`}><button type="button" disabled={date > today() || Boolean(holidays[date]) || isDateLocked(date)} onClick={() => updateCell(date, student.id)} className={`flex h-9 w-full items-center justify-center rounded-md font-bold ${value === "present" ? "bg-emerald-100 text-emerald-700" : value === "absent" ? "bg-rose-100 text-rose-700" : value === "H" ? "bg-amber-100 text-amber-700" : "text-slate-300 hover:bg-slate-100"}`}>{value === "present" ? "P" : value === "absent" ? "A" : value || "-"}</button></td>; })}<td className="sticky right-0 z-20 border-l border-slate-200 bg-white px-3 py-2"><div className="grid grid-cols-4 gap-2 text-center"><span><b className="block text-emerald-700">{stats.present}</b><small className="text-[10px] text-slate-400">P</small></span><span><b className="block text-rose-700">{stats.absent}</b><small className="text-[10px] text-slate-400">A</small></span><span><b className="block text-slate-700">{stats.total}</b><small className="text-[10px] text-slate-400">Days</small></span><span><b className="block text-indigo-700">{stats.percentage}%</b><small className="text-[10px] text-slate-400">Rate</small></span></div></td></tr>; })}</tbody></table></div>{loading && <div className="border-t border-slate-200 p-4 text-center text-xs text-slate-500">Loading register...</div>}{!loading && !students.length && <div className="p-10 text-center text-sm text-slate-500">Select an assigned subject to load its class register.</div>}</section>
+ 
+  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500"><span className="inline-flex items-center gap-1"><Check className="h-3.5 w-3.5 text-emerald-600" /> Click a cell to toggle P/A</span><span><b className="text-emerald-700">P</b> Present</span><span><b className="text-rose-700">A</b> Absent</span><span><b className="text-amber-700">H</b> Holiday, excluded from working days</span></div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GraduationCap, Mail } from "lucide-react";
+import Image from "next/image";
 
 export default function PublicFooter() {
   return (
@@ -7,7 +8,15 @@ export default function PublicFooter() {
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.5fr_1fr_1fr] lg:px-8">
         <div>
           <Link href="/" className="inline-flex items-center gap-2 text-lg font-bold text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600"><GraduationCap className="h-4 w-4" /></span>
+            <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={60}
+                height={60}
+                className="w-full h-full object-cover rounded"
+              />
+            </span>
             Academia<span className="text-indigo-400">OS</span>
           </Link>
           <p className="mt-3 max-w-sm text-sm leading-6">A focused academic workspace for courses, resources, announcements, and deadline-aware submissions.</p>

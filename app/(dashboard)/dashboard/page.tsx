@@ -101,6 +101,50 @@ export default function DashboardPage() {
     }
   };
 
+  const greeting = React.useMemo(() => {
+    const hour = new Date().getHours();
+
+    const greetings = {
+      morning: [
+        "Good morning",
+        "Morning",
+        "Hope you're having a good morning",
+        "A good morning to you",
+      ],
+      afternoon: [
+        "Good afternoon",
+        "Hope your afternoon is going well",
+        "Good to see you this afternoon",
+      ],
+      evening: [
+        "Good evening",
+        "Hope you're having a good evening",
+        "Good to see you this evening",
+      ],
+      night: [
+        "Good night",
+        "Hope you had a good day",
+        "Good to see you",
+      ],
+    };
+
+    const period =
+      hour >= 5 && hour < 12
+        ? "morning"
+        : hour >= 12 && hour < 17
+          ? "afternoon"
+          : hour >= 17 && hour < 21
+            ? "evening"
+            : "night";
+
+    const options = greetings[period];
+
+    return `${options[Math.floor(Math.random() * options.length)]}, ${user?.name || "Student"
+      }`;
+  }, [user?.name]);
+
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -126,9 +170,14 @@ export default function DashboardPage() {
               <span>•</span>
               <span className="text-amber-300 font-bold">{user?.role || "STUDENT"}</span>
             </div>
+            {/* <h1 className="text-2xl sm:text-3xl font-bold tracking-tight"> */}
+            {/* {getGreeting(user?.name || "Student")} */}
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Welcome back, {user?.name || "Student"} 👋
+              {greeting}
             </h1>
+
+
+            {/* </h1> */}
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl leading-relaxed">
               {isStudent && "Access your subjects, verified notes, and upcoming lab assignment deadlines."}
               {isFaculty && "Review student code submissions, inspect similarity matches, and update coursework."}
@@ -164,59 +213,59 @@ export default function DashboardPage() {
       {/* Metric Cards Grid */}
       {(isFaculty || isAdmin) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <div className="text-xs text-slate-500 font-medium">Enrolled Subjects</div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">{subjects.length}</div>
-            <div className="text-[11px] text-indigo-600 mt-0.5">CSE 3rd Semester</div>
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-xs text-slate-500 font-medium">Enrolled Subjects</div>
+              <div className="text-2xl font-bold text-slate-900 mt-1">{subjects.length}</div>
+              <div className="text-[11px] text-indigo-600 mt-0.5">CSE 3rd Semester</div>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <BookOpen className="w-5 h-5" />
+            </div>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <BookOpen className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <div className="text-xs text-slate-500 font-medium">Resource Vault</div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">{resources.length}</div>
-            <div className="text-[11px] text-emerald-600 mt-0.5">Notes, PYQs, Slides</div>
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-xs text-slate-500 font-medium">Resource Vault</div>
+              <div className="text-2xl font-bold text-slate-900 mt-1">{resources.length}</div>
+              <div className="text-[11px] text-emerald-600 mt-0.5">Notes, PYQs, Slides</div>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <FolderArchive className="w-5 h-5" />
+            </div>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <FolderArchive className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <div className="text-xs text-slate-500 font-medium">Assignments</div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">{assignments.length}</div>
-            <div className="text-[11px] text-amber-600 mt-0.5">
-              {assignments.filter((a) => new Date(a.deadline) > new Date()).length} Active
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-xs text-slate-500 font-medium">Assignments</div>
+              <div className="text-2xl font-bold text-slate-900 mt-1">{assignments.length}</div>
+              <div className="text-[11px] text-amber-600 mt-0.5">
+                {assignments.filter((a) => new Date(a.deadline) > new Date()).length} Active
+              </div>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <FileCheck2 className="w-5 h-5" />
             </div>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-            <FileCheck2 className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <div className="text-xs text-slate-500 font-medium">
-              {isFaculty ? "Submissions" : "Attendance Rate"}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div className="text-xs text-slate-500 font-medium">
+                {isFaculty ? "Submissions" : "Attendance Rate"}
+              </div>
+              <div className="text-2xl font-bold text-slate-900 mt-1">
+                {isFaculty ? submissions.length : "89%"}
+              </div>
+              <div className="text-[11px] text-indigo-600 mt-0.5">
+                {isFaculty ? "Awaiting review" : "Min. 75% required"}
+              </div>
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
-              {isFaculty ? submissions.length : "89%"}
+            <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <Award className="w-5 h-5" />
             </div>
-            <div className="text-[11px] text-indigo-600 mt-0.5">
-              {isFaculty ? "Awaiting review" : "Min. 75% required"}
-            </div>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-            <Award className="w-5 h-5" />
           </div>
         </div>
-          </div>
-        )}
+      )}
 
       {/* Main Grid: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -283,11 +332,10 @@ export default function DashboardPage() {
                       ) : (
                         <Link
                           href={`/assignments/${assignment.id}`}
-                          className={`text-xs px-3 py-1 rounded-lg font-semibold transition-colors ${
-                            isExpired
-                              ? "bg-slate-200 text-slate-600 cursor-not-allowed"
-                              : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-                          }`}
+                          className={`text-xs px-3 py-1 rounded-lg font-semibold transition-colors ${isExpired
+                            ? "bg-slate-200 text-slate-600 cursor-not-allowed"
+                            : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                            }`}
                         >
                           {isExpired ? "Submission Closed" : "Submit Lab Code →"}
                         </Link>

@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUserSession } from "@/context/UserContext";
+import { Dock, DockIcon } from "@/components/ui/dock";
 import {
   LayoutDashboard,
   BookOpen,
@@ -16,7 +17,6 @@ import {
   ShieldAlert,
   User,
   LogOut,
-  Building,
   ClipboardCheck,
   BrainCircuit,
   MessageCircleQuestion,
@@ -24,7 +24,7 @@ import {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, role, isStudent, isFaculty, isCR, isAdmin, logout } = useUserSession();
+  const { user, role, isFaculty, isCR, isAdmin, logout } = useUserSession();
 
   // Navigation configured strictly by user's real database role
   const getNavLinks = () => {
@@ -100,27 +100,83 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation Sections */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 py-4">
         <div>
-          <div className="px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <div className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
             Navigation Menu
           </div>
-          <div className="space-y-1">
+
+          <div className="group/nav flex flex-col gap-2">
             {navLinks.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-                    isActive
-                      ? "bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-semibold"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800/70"
-                  }`}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`
+              group/item relative flex w-full origin-left items-center gap-3
+              rounded-xl px-2 py-2
+              text-xs font-medium sm:text-sm
+              transition-all duration-200 ease-out
+              
+              hover:z-10
+              hover:scale-[1.025]
+              hover:translate-x-1
+
+              ${isActive
+                      ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
+                      : "text-slate-400 hover:bg-slate-800/80 hover:text-white"
+                    }
+            `}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
-                  <span>{item.name}</span>
+                  {/* Active indicator */}
+                  {isActive && (
+                    <span
+                      className="
+                  absolute -left-3 top-1/2
+                  h-7 w-1
+                  -translate-y-1/2
+                  rounded-r-full
+                  bg-amber-300
+                "
+                    />
+                  )}
+
+                  {/* Icon container */}
+                  <span
+                    className={`
+                flex h-6 w-6 shrink-0 items-center justify-center
+                rounded-lg
+                transition-all duration-200
+                ${isActive
+                        ? "bg-amber-400 text-slate-950"
+                        : "bg-slate-800/60 text-slate-400  group-hover/item:text-white"
+                      }
+              `}
+                  >
+                    <Icon className="h-4.25 w-4.25" />
+                  </span>
+
+                  {/* Label */}
+                  <span className="min-w-0 flex-1 truncate">
+                    {item.name}
+                  </span>
+
+                  {/* Active arrow */}
+                  <span
+                    className={`
+                text-sm transition-all duration-200
+                ${isActive
+                        ? "translate-x-0 opacity-60"
+                        : "-translate-x-1 opacity-0 group-hover/item:translate-x-0 group-hover/item:opacity-40"
+                      }
+              `}
+                  >
+                    →
+                  </span>
                 </Link>
               );
             })}

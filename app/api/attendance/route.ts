@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "@/lib/auth";
 import Attendance from "@/models/Attendance";
 import { SubjectModel } from "@/models/Subject";
 import User from "@/models/User";
+import FacultySubject from "@/models/FacultySubject";
 import { assertNotFuture, dateKey, dateValue, getEnrolledStudents, getFacultySubject, normalizeAttendance, normalizeDepartment } from "@/lib/attendance";
 
 function errorResponse(error: any) {
@@ -19,14 +20,13 @@ export async function GET(req: NextRequest) {
     const subjectId = searchParams.get("subjectId") || "";
 
     if (view === "subjects") {
-      const ownership = user.role === "ADMIN" ? {} : {
-        $or: [
-          { facultyId: user.id },
-          { facultyName: user.name },
-          { facultyId: { $in: [null, ""] }, facultyName: { $in: [null, ""] }, departmentId: new RegExp(`^(dept-|department-)?${normalizeDepartment(user.department)}$`, "i") },
-        ],
-      };
-      const subjects = await SubjectModel.find(ownership).select("id code name departmentId semesterNumber facultyId facultyName").sort({ semesterNumber: 1, code: 1 }).lean();
+      const assignedSubjects = await FacultySubject.find(user.role === "ADMIN" ? { status: "ACTIVE" } : {
+        facultyId: user.id,
+        status: "ACTIVE",
+      }).select("subjectId").lean();
+      const subjects = await SubjectModel.find({
+        id: { $in: assignedSubjects.map((assignment) => assignment.subjectId) },
+      }).select("id code name departmentId semesterNumber").sort({ semesterNumber: 1, code: 1 }).lean();
       return NextResponse.json({ subjects });
     }
 
@@ -39,26 +39,54 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ subject, students, attendance: existing });
     }
 
+    if (view === "register") {
+      if (!subjectId) return NextResponse.json({ error: "Select a subject first." }, { status: 400 });
+      const subject = await getFacultySubject(subjectId, user.id, user.department, user.name, user.role === "ADMIN");
+      const students = await getEnrolledStudents(subject);
+      const from = dateKey(searchParams.get("from") || "");
+      const to = dateKey(searchParams.get("to") || "");
+      if (from > to) return NextResponse.json({ error: "The register start date must be before its end date." }, { status: 400 });
+      const sessions = await Attendance.find({
+        subjectId: subject.id,
+        branchCode: normalizeDepartment(subject.departmentId),
+        semesterNumber: subject.semesterNumber,
+        date: { $gte: dateValue(from), $lte: dateValue(to) },
+      }).sort({ date: 1 }).lean();
+      return NextResponse.json({ subject, students, sessions });
+    }
+
     if (view === "history") {
       if (user.role !== "FACULTY" && user.role !== "ADMIN") return NextResponse.json({ error: "Faculty access required." }, { status: 403 });
-      const subjects = await SubjectModel.find(user.role === "ADMIN" ? {} : {
-        $or: [
-          { facultyId: user.id },
-          { facultyName: user.name },
-          {
-            $and: [
-              { facultyId: { $in: [null, ""] } },
-              { facultyName: { $in: [null, ""] } },
-              { departmentId: new RegExp(normalizeDepartment(user.department), "i") },
-            ],
-          },
-        ],
-      }).select("id code name").lean();
-      const subjectIds = subjectId ? [subjectId] : subjects.map((subject: any) => subject.id);
-      const sessions = await Attendance.find({ subjectId: { $in: subjectIds } }).sort({ date: -1 }).limit(100).lean();
+      const assignments = await FacultySubject.find(user.role === "ADMIN" ? { status: "ACTIVE" } : {
+        facultyId: user.id,
+        status: "ACTIVE",
+      }).select("subjectId").lean();
+      const subjectIds = assignments.map((assignment) => assignment.subjectId);
+      if (subjectId && !subjectIds.includes(subjectId) && user.role !== "ADMIN") {
+        return NextResponse.json({ error: "You are not assigned to this subject." }, { status: 403 });
+      }
+      const selectedSubjectIds = subjectId ? [subjectId] : subjectIds;
+      const subjects = await SubjectModel.find({ id: { $in: selectedSubjectIds } }).select("id code name").lean();
+      const from = searchParams.get("from");
+      const to = searchParams.get("to");
+      const sessionQuery: Record<string, any> = { subjectId: { $in: selectedSubjectIds } };
+      if (from || to) {
+        sessionQuery.date = {};
+        if (from) sessionQuery.date.$gte = dateValue(dateKey(from));
+        if (to) sessionQuery.date.$lte = dateValue(dateKey(to));
+      }
+      const sessions = await Attendance.find(sessionQuery).sort({ date: -1 }).limit(366).lean();
+      const studentIds = sessions.flatMap((session: any) => session.records.map((record: any) => record.studentId));
+      const students = await User.find({ _id: { $in: studentIds } }).select("name rollNumber").lean();
+      const studentMap = new Map(students.map((student: any) => [student._id.toString(), student]));
       return NextResponse.json({
         sessions: sessions.map((session: any) => ({
           ...session,
+          records: session.records.map((record: any) => ({
+            ...record,
+            studentName: studentMap.get(record.studentId)?.name || "Unknown student",
+            rollNumber: studentMap.get(record.studentId)?.rollNumber || "Unassigned",
+          })),
           subject: subjects.find((subject: any) => subject.id === session.subjectId),
         })),
         subjects,

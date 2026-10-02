@@ -11,8 +11,7 @@
     "seed:admin": "tsx scripts/seed.ts",
     "seed:demo": "tsx scripts/seed.ts",
     "migrate:branches": "tsx scripts/migrate-branches.ts",
-    "test:management": "tsx scripts/test-faculty-branch-management.ts",
-    "test:lifecycle": "tsx scripts/test-assignment-lifecycle.ts"
+    "test:management": "tsx scripts/test-faculty-branch-management.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

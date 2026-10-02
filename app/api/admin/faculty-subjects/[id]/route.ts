@@ -36,12 +36,9 @@ export async function PATCH(
       facultySubject.revokedAt = new Date();
       facultySubject.revocationReason = reason || "Assignment revoked by Super Admin";
     } else if (status === "ACTIVE") {
-      // Check if another active assignment exists for this exact tuple
+      // Check if another faculty member owns this subject
       const existingActive = await FacultySubject.findOne({
-        facultyId: facultySubject.facultyId,
         subjectId: facultySubject.subjectId,
-        departmentId: facultySubject.departmentId,
-        semesterNumber: facultySubject.semesterNumber,
         status: "ACTIVE",
         _id: { $ne: facultySubject._id },
       });

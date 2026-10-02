@@ -212,3 +212,23 @@ body { background: #f7f4ec; }
 .bg-indigo-950\/40, .bg-indigo-950\/60, .bg-indigo-950\/80 { background-color: rgb(75 53 13 / 0.4) !important; }
 .border-indigo-500\/20, .border-indigo-500\/30, .border-indigo-500\/40 { border-color: rgb(197 138 25 / 0.35) !important; }
 .shadow-indigo-200, .shadow-indigo-500\/25, .shadow-indigo-600\/30 { --tw-shadow-color: rgb(197 138 25 / 0.25) !important; }
+
+@keyframes workflowLine {
+  from {
+    transform: translateX(-120px);
+  }
+
+  to {
+    transform: translateX(900px);
+  }
+}
+
+@keyframes workflowBorder {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -101,6 +101,21 @@ export async function POST(req: NextRequest) {
       ],
     }).lean();
 
+    if (!branchExists) {
+      return NextResponse.json({ error: `Branch ${normDept} does not exist.` }, { status: 404 });
+    }
+
+    const facultyBranchIds = [
+      ...(Array.isArray((faculty as any).branchIds) ? (faculty as any).branchIds : []),
+      (faculty as any).branchId,
+    ].filter(Boolean).map((branchId: any) => branchId.toString());
+    if (!facultyBranchIds.includes(branchExists._id.toString())) {
+      return NextResponse.json(
+        { error: `${faculty.name} is not affiliated with the ${normDept} branch.` },
+        { status: 400 }
+      );
+    }
+
     // 5. Verify Subject exists
     let subject = await SubjectModel.findOne({ id: subjectId }).lean();
     if (!subject) {
@@ -142,18 +157,15 @@ export async function POST(req: NextRequest) {
     const standardDeptId = `dept-${normDept.toLowerCase()}`;
     const facultyIdentifier = faculty._id ? faculty._id.toString() : (faculty as any).id;
 
-    // 10. Check if an ACTIVE assignment already exists
-    const existingActive = await FacultySubject.findOne({
-      facultyId: facultyIdentifier,
+    // A subject can have only one active faculty owner at a time.
+    const existingSubjectAssignment = await FacultySubject.findOne({
       subjectId: subject.id,
-      departmentId: standardDeptId,
-      semesterNumber: semNum,
       status: "ACTIVE",
     });
 
-    if (existingActive) {
+    if (existingSubjectAssignment) {
       return NextResponse.json(
-        { error: `Faculty ${faculty.name} is already actively assigned to ${subject.name} (${subject.code}) in ${normDept} Semester ${semNum}.` },
+        { error: `${subject.code} is already assigned to ${existingSubjectAssignment.facultyName}. Edit that faculty member first to release it.` },
         { status: 409 }
       );
     }

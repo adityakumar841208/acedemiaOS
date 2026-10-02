@@ -8,20 +8,22 @@ export interface IModuleItem {
   topics: string[];
 }
 
-export interface ISubject extends Document {
+export interface ISubject {
   id: string;
   departmentId: string;
+  branchCode?: string;
   semesterNumber: number;
   code: string;
   name: string;
   facultyId?: string;
-  facultyName: string;
+  facultyName?: string;
   credits: number;
   color?: string;
   description: string;
   modulesCount: number;
   references?: string[];
   modules?: IModuleItem[];
+  isActive?: boolean;
   syllabusUpdatedAt?: Date;
   syllabusUpdatedBy?: string;
   createdAt: Date;
@@ -43,17 +45,19 @@ const SubjectSchema = new Schema<ISubject>(
   {
     id: { type: String, required: true, unique: true, index: true },
     departmentId: { type: String, required: true, index: true },
+    branchCode: { type: String, trim: true, uppercase: true, index: true },
     semesterNumber: { type: Number, required: true, index: true },
     code: { type: String, required: true, trim: true },
     name: { type: String, required: true, trim: true },
     facultyId: { type: String, default: "" },
-    facultyName: { type: String, required: true, trim: true },
+    facultyName: { type: String, default: "Unassigned", trim: true },
     credits: { type: Number, default: 3 },
     color: { type: String, default: "from-blue-600 to-indigo-600" },
     description: { type: String, default: "" },
     modulesCount: { type: Number, default: 0 },
     references: [{ type: String, trim: true }],
     modules: [ModuleItemSchema],
+    isActive: { type: Boolean, default: true },
     syllabusUpdatedAt: { type: Date },
     syllabusUpdatedBy: { type: String, trim: true },
   },

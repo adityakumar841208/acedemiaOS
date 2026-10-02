@@ -4,6 +4,7 @@ import { Resource } from "@/types";
 import { requireAuth } from "@/lib/auth";
 import connectToDatabase from "@/lib/db";
 import ResourceModel from "@/models/Resource";
+import SubjectModel from "@/models/Subject";
 import { createResourceNotification } from "@/lib/services/notification.service";
 
 export async function GET(req: NextRequest) {
@@ -62,17 +63,21 @@ export async function POST(req: NextRequest) {
       contentSnippet = "",
     } = body;
 
-    if (!title || !subjectId) {
-      return NextResponse.json({ error: "Title and Subject are required." }, { status: 400 });
+    await connectToDatabase();
+    let subject: any = await SubjectModel.findOne({
+      $or: [{ id: subjectId }, { code: subjectId }],
+    }).lean();
+
+    if (!subject) {
+      subject = store.getSubjectById(subjectId);
     }
 
-    const subject = store.getSubjectById(subjectId);
     if (!subject) {
       return NextResponse.json({ error: "Selected subject not found." }, { status: 404 });
     }
 
-    const modules = store.getModules(subject.id);
-    const mod = modules.find((m) => m.id === moduleId) || modules[0] || {
+    const modules = subject.modules || store.getModules(subject.id);
+    const mod = modules.find((m: any) => m.id === moduleId) || modules[0] || {
       id: "mod-generic",
       moduleNumber: 1,
       title: "General Module",

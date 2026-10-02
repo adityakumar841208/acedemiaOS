@@ -11,6 +11,7 @@ export interface IFacultySubject extends Document {
   subjectCode: string;
   subjectName: string;
   departmentId: string;
+  branchId?: mongoose.Types.ObjectId;
   branchCode: string;
   semesterNumber: number;
   status: FacultySubjectStatus;
@@ -33,6 +34,7 @@ const FacultySubjectSchema = new Schema<IFacultySubject>(
     subjectCode: { type: String, required: true, trim: true },
     subjectName: { type: String, required: true, trim: true },
     departmentId: { type: String, required: true, index: true },
+    branchId: { type: Schema.Types.ObjectId, ref: "Branch", index: true },
     branchCode: { type: String, required: true, trim: true, uppercase: true },
     semesterNumber: { type: Number, required: true, index: true },
     status: {

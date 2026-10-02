@@ -2,17 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import connectToDatabase from "@/lib/db";
 import { requireRole } from "@/lib/auth";
-import { assertNotFuture, dateKey, getEnrolledStudents, getFacultySubject, normalizeAttendance } from "@/lib/attendance";
+import { assertNotFuture, dateKey, getEnrolledStudents, getFacultySubject } from "@/lib/attendance";
 
-function importDate(value: unknown, fallback: string) {
-  if (value instanceof Date) return dateKey(value);
-  if (typeof value === "number") {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed) return dateKey(`${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`);
-  }
-  const text = String(value || fallback).trim();
-  return dateKey(text);
-}
+const dateHeader = /^\d{4}-\d{2}-\d{2}$/;
+
+type ImportEntry = {
+  date: string;
+  type?: "holiday";
+  holidayName?: string;
+  records?: Array<{ studentId: string; status: "present" | "absent" }>;
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,94 +19,85 @@ export async function POST(req: NextRequest) {
     await connectToDatabase();
     const formData = await req.formData();
     const subjectId = String(formData.get("subjectId") || "");
-    const date = dateKey(String(formData.get("date") || ""));
-    assertNotFuture(date);
     const file = formData.get("file");
     if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".xlsx")) {
-      return NextResponse.json({ error: "Upload an .xlsx attendance file." }, { status: 400 });
+      return NextResponse.json({ error: "Upload the downloaded .xlsx attendance register." }, { status: 400 });
     }
+
     const subject = await getFacultySubject(subjectId, user.id, user.department, user.name, user.role === "ADMIN");
     const students = await getEnrolledStudents(subject);
     const byId = new Map(students.map((student) => [student.id, student]));
     const byRoll = new Map(students.map((student) => [student.rollNumber.toLowerCase(), student]));
-    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    if (!firstSheet) return NextResponse.json({ error: "The workbook is empty." }, { status: 400 });
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: "" });
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
+    const sheet = workbook.Sheets["Attendance Register"] || workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) return NextResponse.json({ error: "The workbook is empty." }, { status: 400 });
+
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { range: 1, defval: "" });
+    const firstRow = rows[0] || {};
+    const dateColumns = Object.keys(firstRow).filter((key) => dateHeader.test(key));
+    if (!dateColumns.length) return NextResponse.json({ error: "No YYYY-MM-DD attendance date columns were found." }, { status: 400 });
+    dateColumns.forEach((date) => assertNotFuture(dateKey(date)));
+
     const errors: string[] = [];
-    const seen = new Set<string>();
-    const records: Array<{ studentId: string; status: "present" | "absent"; name: string; rollNumber: string }> = [];
-    let importDateKey = "";
-    let dayType: "attendance" | "holiday" = "attendance";
-    let holidayName = "";
+    const rowStudents = new Map<string, string>();
     rows.forEach((row, index) => {
-      const rowNumber = index + 2;
-      let rowDate: string;
-      try {
-        rowDate = importDate(row.Date || row.date, date);
-        assertNotFuture(rowDate);
-        if (!importDateKey) importDateKey = rowDate;
-        if (rowDate !== importDateKey) {
-          errors.push(`Row ${rowNumber}: all rows in this upload must use the same date. Upload each date separately.`);
-          return;
-        }
-      } catch {
-        errors.push(`Row ${rowNumber}: Date must be a valid YYYY-MM-DD calendar date.`);
-        return;
-      }
-      const rawStatus = String(row.Attendance || row.attendance || row.Status || row.status || "").trim().toLowerCase();
-      if (["holiday", "h"].includes(rawStatus)) {
-        if (studentIdOrEmpty(row)) {
-          errors.push(`Row ${rowNumber}: holiday rows must not include a student.`);
-          return;
-        }
-        dayType = "holiday";
-        holidayName = String(row["Holiday Name"] || row.holidayName || "Holiday").trim() || "Holiday";
-        return;
-      }
-      const studentId = String(row["Student ID"] || row["studentId"] || "").trim();
-      const rollNumber = String(row["Roll Number"] || row["rollNumber"] || "").trim();
+      const rowNumber = index + 3;
+      const studentId = String(row["Student ID"] || "").trim();
+      const rollNumber = String(row["Roll No."] || row["Roll Number"] || "").trim();
       const student = (studentId && byId.get(studentId)) || (rollNumber && byRoll.get(rollNumber.toLowerCase()));
       if (!student) {
-        errors.push(`Row ${rowNumber}: student ID or roll number was not found in this class.`);
+        errors.push(`Row ${rowNumber}: Student ID or Roll No. does not belong to this class.`);
         return;
       }
-      if (seen.has(student.id)) {
+      if (rowStudents.has(student.id)) {
         errors.push(`Row ${rowNumber}: duplicate student ${student.rollNumber}.`);
         return;
       }
-      try {
-        const status = normalizeAttendance(row.Attendance || row.attendance || row.Status || row.status);
-        seen.add(student.id);
-        records.push({ studentId: student.id, status, name: student.name, rollNumber: student.rollNumber });
-      } catch {
-        errors.push(`Row ${rowNumber}: Attendance must be Present/P, Absent/A, or Holiday/H.`);
-      }
+      rowStudents.set(student.id, student.id);
     });
-    if (dayType === "attendance") {
-      const missing = students.filter((student) => !seen.has(student.id));
-      missing.forEach((student) => errors.push(`${student.rollNumber}: student is missing from the import.`));
-    } else if (records.length) {
-      errors.push("Holiday imports must not contain attendance records.");
+
+    const entries: ImportEntry[] = [];
+    for (const date of dateColumns) {
+      const statuses = new Map<string, "present" | "absent">();
+      let holiday = false;
+      let hasValue = false;
+      rows.forEach((row, index) => {
+        const studentId = rowStudents.get(String(row["Student ID"] || "").trim()) || byRoll.get(String(row["Roll No."] || row["Roll Number"] || "").trim().toLowerCase())?.id;
+        if (!studentId) return;
+        const value = String(row[date] || "").trim().toUpperCase();
+        if (!value) return;
+        hasValue = true;
+        if (value === "H") {
+          holiday = true;
+          return;
+        }
+        if (value === "P" || value === "A") {
+          statuses.set(studentId, value === "P" ? "present" : "absent");
+          return;
+        }
+        errors.push(`Row ${index + 3}, ${date}: use only P, A, or H.`);
+      });
+      if (!hasValue) continue;
+      if (holiday && statuses.size) {
+        errors.push(`${date}: holiday columns cannot contain P or A values.`);
+      } else if (holiday) {
+        entries.push({ date, type: "holiday", holidayName: "Holiday" });
+      } else if (statuses.size !== students.length) {
+        errors.push(`${date}: every enrolled student must have P or A.`);
+      } else {
+        entries.push({ date, records: Array.from(statuses, ([studentId, status]) => ({ studentId, status })) });
+      }
     }
+
     return NextResponse.json({
       preview: {
         subject: { id: subject.id, code: subject.code, name: subject.name },
-        date: importDateKey || date,
-        dayType,
-        holidayName,
-        studentsFound: records.length,
-        present: records.filter((record) => record.status === "present").length,
-        absent: records.filter((record) => record.status === "absent").length,
+        entries,
+        dates: entries.map((entry) => entry.date),
         errors,
-        records,
       },
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Unable to preview attendance import." }, { status: error.status || 400 });
+    return NextResponse.json({ error: error.message || "Unable to import attendance register." }, { status: error.status || 400 });
   }
-}
-
-function studentIdOrEmpty(row: Record<string, unknown>) {
-  return String(row["Student ID"] || row.studentId || row["Roll Number"] || row.rollNumber || "").trim();
 }

@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
 
 function LoginForm() {
   const router = useRouter();
@@ -81,7 +82,13 @@ function LoginForm() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <Link href="/" className="inline-flex items-center gap-2.5 group mb-4">
           <div className="w-11 h-11 rounded-2xl bg-linear-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/25 group-hover:scale-105 transition-transform">
-            <GraduationCap className="w-6 h-6" />
+            <Image
+            src="/logo.png"
+                        alt="Logo"
+                        width={60}
+                        height={60}
+                        className="w-full h-full object-cover rounded"
+                      />
           </div>
           <span className="text-2xl font-extrabold tracking-tight">
             Academia<span className="text-amber-300">OS</span>

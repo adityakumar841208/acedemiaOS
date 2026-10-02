@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import FacultyModal, { FacultyData, BranchOption } from "./FacultyModal";
-import FacultySubjectModal from "./FacultySubjectModal";
 import AdminNavigation from "../AdminNavigation";
 
 export default function FacultyManagement() {
@@ -38,14 +37,6 @@ export default function FacultyManagement() {
   const [availableBranches, setAvailableBranches] = useState<BranchOption[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [facultyToEdit, setFacultyToEdit] = useState<FacultyData | null>(null);
-
-  const [subjectModalOpen, setSubjectModalOpen] = useState(false);
-  const [facultyForSubjects, setFacultyForSubjects] = useState<FacultyData | null>(null);
-
-  const openSubjectModal = (faculty: FacultyData) => {
-    setFacultyForSubjects(faculty);
-    setSubjectModalOpen(true);
-  };
 
   // Fetch branches for filter
   useEffect(() => {
@@ -226,7 +217,7 @@ export default function FacultyManagement() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/75 text-slate-500 font-semibold uppercase text-[11px] tracking-wider">
                 <th className="py-3.5 px-4">Faculty Member</th>
-                <th className="py-3.5 px-4">Assigned Branches</th>
+                <th className="py-3.5 px-4">Assigned Branches & Subjects</th>
                 <th className="py-3.5 px-4">Office & Contact</th>
                 <th className="py-3.5 px-4">Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
@@ -281,26 +272,59 @@ export default function FacultyManagement() {
                         </div>
                       </td>
 
-                      {/* Multi-Branch Badges */}
+                      {/* Multi-Branch & Assigned Subjects Badges */}
                       <td className="py-3.5 px-4">
-                        {faculty.branches && faculty.branches.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5 max-w-xs">
-                            {faculty.branches.map((b) => (
-                              <span
-                                key={b.id || b.code}
-                                title={b.name}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60"
-                              >
-                                <Building className="w-3 h-3 text-indigo-500" />
-                                <span>{b.code}</span>
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">
-                            {faculty.department || "No branches assigned"}
-                          </span>
-                        )}
+                        <div>
+                          {faculty.branches && faculty.branches.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5 max-w-xs">
+                              {faculty.branches.map((b) => (
+                                <span
+                                  key={b.id || b.code}
+                                  title={b.name}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60"
+                                >
+                                  <Building className="w-3 h-3 text-indigo-500" />
+                                  <span>{b.code}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">
+                              {faculty.department || "No branches assigned"}
+                            </span>
+                          )}
+
+                          {faculty.assignedSubjects && faculty.assignedSubjects.length > 0 ? (
+                            <div className="mt-2 pt-1.5 border-t border-slate-100 flex flex-wrap gap-1 max-w-xs">
+                              {faculty.assignedSubjects.slice(0, 3).map((sub) => (
+                                <span
+                                  key={sub.id || sub.subjectId}
+                                  title={`${sub.subjectCode} - ${sub.subjectName} (Semester ${sub.semesterNumber})`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200/60"
+                                >
+                                  <BookOpen className="w-2.5 h-2.5 text-purple-500" />
+                                  <span>{sub.subjectCode}</span>
+                                  <span className="text-[9px] text-purple-400 font-mono">S{sub.semesterNumber}</span>
+                                </span>
+                              ))}
+                              {faculty.assignedSubjects.length > 3 && (
+                                <span
+                                  title={faculty.assignedSubjects
+                                    .slice(3)
+                                    .map((s) => `${s.subjectCode}: ${s.subjectName} (Sem ${s.semesterNumber})`)
+                                    .join("\n")}
+                                  className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 cursor-help"
+                                >
+                                  +{faculty.assignedSubjects.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-[11px] text-amber-600/80 italic flex items-center gap-1">
+                              <span>No subjects assigned</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Office & Phone */}
@@ -344,15 +368,6 @@ export default function FacultyManagement() {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openSubjectModal(faculty)}
-                            title="Manage Teaching Subjects"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg transition-colors cursor-pointer mr-1"
-                          >
-                            <BookOpen className="w-3.5 h-3.5" />
-                            <span>Manage Subjects</span>
-                          </button>
-
                           <button
                             onClick={() => openEditModal(faculty)}
                             title="Edit Faculty Member"
@@ -415,15 +430,6 @@ export default function FacultyManagement() {
         onClose={() => setModalOpen(false)}
         facultyToEdit={facultyToEdit}
         onSuccess={fetchFaculty}
-      />
-
-      {/* Super Admin Teaching Subject Assignment Modal */}
-      <FacultySubjectModal
-        isOpen={subjectModalOpen}
-        onClose={() => setSubjectModalOpen(false)}
-        faculty={facultyForSubjects}
-        availableBranches={availableBranches}
-        onAssignmentChanged={fetchFaculty}
       />
     </div>
   );

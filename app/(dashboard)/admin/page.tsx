@@ -154,7 +154,7 @@ export default function AdminPage() {
           <button
             onClick={handleReset}
             disabled={resetting}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-colors self-start sm:self-auto disabled:opacity-60 cursor-pointer"
+            className="hidden items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs sm:text-sm shadow-sm transition-colors self-start sm:self-auto disabled:opacity-60 cursor-pointer"
           >
             <RotateCcw className={`w-4 h-4 ${resetting ? "animate-spin" : ""}`} />
             <span>{resetting ? "Resetting State..." : "Reset Demo Data"}</span>
@@ -321,70 +321,9 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Services Health Box */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-4">
-        <h3 className="font-bold text-slate-900 text-base sm:text-lg flex items-center gap-2">
-          <Cpu className="w-5 h-5 text-indigo-600" />
-          <span>Core Subsystem Status</span>
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-800">Branch & Department Engine</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Operational</span>
-              </span>
-            </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              MongoDB-backed dynamic branch collections with multi-branch faculty assignment and safe deactivation protection.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-800">Academic Tree Visualizer</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Active</span>
-              </span>
-            </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              Dynamically groups students into Branch &rarr; Semester &rarr; Student nodes with real-time census counts.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-800">Hard Deadline Lock Server</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Enforcing</span>
-              </span>
-            </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              Real-time millisecond countdown check on all assignment submission routes.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-800">Pairwise Similarity Analyzer</span>
-              <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Scanning</span>
-              </span>
-            </div>
-            <p className="text-slate-500 text-[11px] leading-relaxed">
-              Automated 3-gram token shingling and Jaccard distance calculation on student submissions.
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Demo Reset Box */}
-      <div className="bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-3xl p-6 sm:p-8 space-y-3">
+      <div className="hidden bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-3xl p-6 sm:p-8 space-y-3">
         <h3 className="font-bold text-purple-950 text-base">
           Hackathon Evaluator Reset Utility
         </h3>

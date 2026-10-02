@@ -1,70 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { store } from "@/lib/store";
 import { Assignment } from "@/types";
-import { requireRole, getCurrentUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import connectToDatabase from "@/lib/db";
 import AssignmentModel from "@/models/Assignment";
-import AssignmentSubmission from "@/models/AssignmentSubmission";
-import FacultySubject from "@/models/FacultySubject";
 import SubjectModel from "@/models/Subject";
+import FacultySubject from "@/models/FacultySubject";
+import { ensureSyllabusSubjectsInDB } from "@/lib/syllabus-catalog";
 import { createAssignmentNotification } from "@/lib/services/notification.service";
 import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
-import { CANONICAL_SYLLABUS_SUBJECTS } from "@/lib/syllabus-catalog";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const subjectId = searchParams.get("subjectId") || undefined;
-  const departmentId = searchParams.get("departmentId") || undefined;
-  const semesterNumber = searchParams.get("semesterNumber")
-    ? Number(searchParams.get("semesterNumber"))
-    : undefined;
-  const facultyId = searchParams.get("facultyId") || undefined;
-
+  
   let rawAssignments: any[] = [];
-  const dbSubmissionsMap: Record<string, any[]> = {};
-
   try {
-    const viewer = await getCurrentUser();
     await connectToDatabase();
-
-    const query: any = {};
-    if (subjectId) query.subjectId = subjectId;
-    if (departmentId && departmentId !== "ALL") {
-      const norm = departmentId.replace(/^(dept-|department-)/i, "").toUpperCase();
-      query.$or = [
-        { departmentId },
-        { departmentId: `dept-${norm.toLowerCase()}` },
-        { departmentId: norm },
-      ];
-    }
-    if (semesterNumber) query.semesterNumber = semesterNumber;
-    if (facultyId) query.facultyId = facultyId;
-
-    // Student Targeting: Students & CRs only see coursework for their department & semester
-    if (viewer && (viewer.role === "STUDENT" || viewer.role === "CR")) {
-      const studentDept = (viewer.department || "").replace(/^(dept-|department-)/i, "").toUpperCase();
-      if (studentDept) {
-        query.$or = [
-          { departmentId: `dept-${studentDept.toLowerCase()}` },
-          { departmentId: studentDept },
-        ];
-      }
-      if (viewer.semester) {
-        query.semesterNumber = viewer.semester;
-      }
-    }
-
+    const query = subjectId ? { subjectId } : {};
     const dbAssignments = await AssignmentModel.find(query).sort({ deadline: 1 }).lean();
     if (dbAssignments && dbAssignments.length > 0) {
       rawAssignments = dbAssignments.map((assignment: any) => ({
         ...assignment,
         assignmentType: getAssignmentType(assignment.assignmentType),
-        allowedFileTypes:
-          assignment.allowedFileTypes ||
-          getAssignmentConfig(assignment.assignmentType).allowedFileTypes,
+        allowedFileTypes: assignment.allowedFileTypes || getAssignmentConfig(assignment.assignmentType).allowedFileTypes,
         maxFileSize: assignment.maxFileSize || 25 * 1024 * 1024,
-        maxFiles:
-          assignment.maxFiles ?? getAssignmentConfig(assignment.assignmentType).maxFiles,
+        maxFiles: assignment.maxFiles ?? getAssignmentConfig(assignment.assignmentType).maxFiles,
         _id: undefined,
         deadline: assignment.deadline.toISOString(),
         createdAt: assignment.createdAt.toISOString(),
@@ -73,129 +35,51 @@ export async function GET(req: NextRequest) {
       rawAssignments = store.getAssignments(subjectId).map((assignment) => ({
         ...assignment,
         assignmentType: getAssignmentType(assignment.assignmentType),
-        allowedFileTypes:
-          assignment.allowedFileTypes ||
-          getAssignmentConfig(assignment.assignmentType).allowedFileTypes,
+        allowedFileTypes: assignment.allowedFileTypes || getAssignmentConfig(assignment.assignmentType).allowedFileTypes,
         maxFileSize: assignment.maxFileSize || 25 * 1024 * 1024,
-        maxFiles:
-          assignment.maxFiles ?? getAssignmentConfig(assignment.assignmentType).maxFiles,
+        maxFiles: assignment.maxFiles ?? getAssignmentConfig(assignment.assignmentType).maxFiles,
       }));
     }
-
-    // Query submissions from MongoDB for all retrieved assignments
-    const assignmentIds = rawAssignments.map((a) => a.id);
-    if (assignmentIds.length > 0) {
-      const dbSubs = await AssignmentSubmission.find({
-        assignmentId: { $in: assignmentIds },
-      }).lean();
-
-      dbSubs.forEach((sub: any) => {
-        if (!dbSubmissionsMap[sub.assignmentId]) {
-          dbSubmissionsMap[sub.assignmentId] = [];
-        }
-        dbSubmissionsMap[sub.assignmentId].push(sub);
-      });
-    }
-
-    let activeStudents: any[] = [];
-    try {
-      const UserModel = (await import("@/models/User")).default;
-      activeStudents = await UserModel.find({
-        role: { $in: ["STUDENT", "CR"] },
-        status: "ACTIVE",
-      })
-        .select("department branchId semester")
-        .lean();
-    } catch {}
-
-    // Enrich with live database submission & evaluation statistics
-    const enrichedAssignments = rawAssignments.map((assign) => {
-      let subs = dbSubmissionsMap[assign.id];
-      if (!subs || subs.length === 0) {
-        subs = store.getSubmissions(assign.id);
-      }
-
-      const totalSubmissions = subs.length;
-      const evaluatedCount = subs.filter(
-        (s) => s.status === "graded" && s.marks !== undefined
-      ).length;
-      const pendingCount = totalSubmissions - evaluatedCount;
-      const isPastDeadline = new Date(assign.deadline).getTime() < Date.now();
-      const lateCount = subs.filter(
-        (s) =>
-          s.status === "late" ||
-          (s.submittedAt && new Date(s.submittedAt) > new Date(assign.deadline))
-      ).length;
-      const totalScore = subs
-        .filter((s) => s.status === "graded" && s.marks !== undefined)
-        .reduce((acc, s) => acc + (s.marks || 0), 0);
-      const averageScore =
-        evaluatedCount > 0 ? Math.round((totalScore / evaluatedCount) * 10) / 10 : 0;
-      const progressPercentage =
-        totalSubmissions > 0 ? Math.round((evaluatedCount / totalSubmissions) * 100) : 0;
-
-      const deptCode = (assign.departmentId || "").replace(/^(dept-|department-)/i, "").toUpperCase();
-      const enrolledForAssignment = activeStudents.filter((st: any) => {
-        if (assign.semesterNumber && st.semester && st.semester !== assign.semesterNumber) {
-          return false;
-        }
-        if (deptCode && st.department && st.department.toUpperCase() !== deptCode) {
-          return false;
-        }
-        return true;
-      });
-
-      const totalStudents = Math.max(
-        enrolledForAssignment.length > 0 ? enrolledForAssignment.length : (activeStudents.length || 6),
-        totalSubmissions
-      );
-      const notSubmittedCount = Math.max(0, totalStudents - totalSubmissions);
-
-      let evaluationStatus: "NO_SUBMISSIONS" | "PENDING_EVALUATION" | "FULLY_EVALUATED" =
-        "NO_SUBMISSIONS";
-      if (totalSubmissions === 0) {
-        evaluationStatus = "NO_SUBMISSIONS";
-      } else if (pendingCount > 0) {
-        evaluationStatus = "PENDING_EVALUATION";
-      } else {
-        evaluationStatus = "FULLY_EVALUATED";
-      }
-
-      return {
-        ...assign,
-        totalSubmissions,
-        totalStudents,
-        notSubmittedCount,
-        pendingCount,
-        evaluatedCount,
-        lateCount,
-        averageScore,
-        progressPercentage,
-        isPastDeadline,
-        evaluationStatus,
-      };
-    });
-
-    return NextResponse.json({ assignments: enrichedAssignments });
   } catch (error) {
     console.error("Assignment database read failed; using local fallback.", error);
     rawAssignments = store.getAssignments(subjectId);
-    return NextResponse.json({
-      assignments: rawAssignments.map((a) => ({
-        ...a,
-        totalSubmissions: 0,
-        totalStudents: 6,
-        notSubmittedCount: 6,
-        pendingCount: 0,
-        evaluatedCount: 0,
-        lateCount: 0,
-        averageScore: 0,
-        progressPercentage: 0,
-        isPastDeadline: false,
-        evaluationStatus: "NO_SUBMISSIONS",
-      })),
-    });
   }
+
+  // Enrich with live submission & evaluation statistics
+  const enrichedAssignments = rawAssignments.map((assign) => {
+    const subs = store.getSubmissions(assign.id);
+    const totalSubmissions = subs.length;
+    const evaluatedCount = subs.filter((s) => s.status === "graded" && s.marks !== undefined).length;
+    const pendingCount = totalSubmissions - evaluatedCount;
+    const isPastDeadline = new Date(assign.deadline).getTime() < Date.now();
+    const lateCount = subs.filter((s) => s.status === "late" || (s.submittedAt && new Date(s.submittedAt) > new Date(assign.deadline))).length;
+    const totalScore = subs.filter((s) => s.status === "graded" && s.marks !== undefined).reduce((acc, s) => acc + (s.marks || 0), 0);
+    const averageScore = evaluatedCount > 0 ? Math.round((totalScore / evaluatedCount) * 10) / 10 : 0;
+    const progressPercentage = totalSubmissions > 0 ? Math.round((evaluatedCount / totalSubmissions) * 100) : 0;
+
+    let evaluationStatus: "NO_SUBMISSIONS" | "PENDING_EVALUATION" | "FULLY_EVALUATED" = "NO_SUBMISSIONS";
+    if (totalSubmissions === 0) {
+      evaluationStatus = "NO_SUBMISSIONS";
+    } else if (pendingCount > 0) {
+      evaluationStatus = "PENDING_EVALUATION";
+    } else {
+      evaluationStatus = "FULLY_EVALUATED";
+    }
+
+    return {
+      ...assign,
+      totalSubmissions,
+      pendingCount,
+      evaluatedCount,
+      lateCount,
+      averageScore,
+      progressPercentage,
+      isPastDeadline,
+      evaluationStatus,
+    };
+  });
+
+  return NextResponse.json({ assignments: enrichedAssignments });
 }
 
 export async function POST(req: NextRequest) {
@@ -225,56 +109,53 @@ export async function POST(req: NextRequest) {
     }
 
     await connectToDatabase();
+    await ensureSyllabusSubjectsInDB();
 
-    // 1. BACKEND AUTHORIZATION ENFORCEMENT:
-    // When faculty submits, verify faculty has an ACTIVE faculty-subject assignment for this subject
-    let activeAssignment: any = null;
+    const subject = await SubjectModel.findOne({
+      $or: [
+        { id: subjectId },
+        { code: subjectId },
+        ...(mongoose.isValidObjectId(subjectId) ? [{ _id: new mongoose.Types.ObjectId(subjectId) }] : []),
+      ],
+    }).lean();
+
+    if (!subject) {
+      return NextResponse.json({ error: "Subject not found in database." }, { status: 404 });
+    }
+
+    // Role-based Subject Area Restriction:
+    // If the creator is a FACULTY member, enforce that they have an active assignment for this subject
     if (faculty.role === "FACULTY") {
-      activeAssignment = await FacultySubject.findOne({
+      const activeAssignment = await FacultySubject.findOne({
         facultyId: faculty.id,
-        subjectId,
+        $or: [
+          { subjectId: subject.id },
+          { subjectCode: subject.code },
+          ...(subject._id ? [{ subjectId: subject._id.toString() }] : []),
+        ],
         status: "ACTIVE",
-      }).lean();
+      });
 
       if (!activeAssignment) {
         return NextResponse.json(
           {
-            success: false,
-            message: "You are not assigned to this subject.",
-            error: "You are not assigned to this subject.",
+            error: `Access Denied: You are not assigned to teach ${subject.code} (${subject.name}). Faculty members can only publish assignments for their assigned subjects.`,
           },
           { status: 403 }
         );
       }
     }
 
-    // 2. Fetch subject details from SubjectModel or canonical syllabus
-    let subject: any = await SubjectModel.findOne({ id: subjectId }).lean();
-    if (!subject) {
-      const canonical = CANONICAL_SYLLABUS_SUBJECTS.find((s) => s.id === subjectId);
-      if (canonical) {
-        subject = canonical;
-      }
-    }
-    if (!subject) {
-      subject = store.getSubjectById(subjectId);
-    }
+    const subModules = (subject.modules || []).map((m: any, idx: number) => ({
+      id: m.id || `mod-${subject.code.toLowerCase()}-${m.moduleNumber || idx + 1}`,
+      title: m.title || `Module ${m.moduleNumber || idx + 1}`,
+      moduleNumber: m.moduleNumber || idx + 1,
+    }));
 
-    if (!subject) {
-      return NextResponse.json({ error: "Subject not found." }, { status: 404 });
-    }
-
-    // 3. AUTOMATICALLY INHERIT ACADEMIC CONTEXT:
-    // Department, Semester, and Subject are inherited from the active assignment / subject entity
-    const departmentId = activeAssignment?.departmentId || subject.departmentId;
-    const semesterNumber = activeAssignment?.semesterNumber || subject.semesterNumber;
-    const subjectCode = activeAssignment?.subjectCode || subject.code;
-    const subjectName = activeAssignment?.subjectName || subject.name;
-
-    const modules = subject.modules || store.getModules(subject.id);
-    const mod = modules.find((m: any) => m.id === moduleId) || modules[0] || {
-      id: "mod-gen",
+    const mod = subModules.find((m: any) => m.id === moduleId) || subModules[0] || {
+      id: `mod-${subject.code.toLowerCase()}-1`,
       title: "General Module",
+      moduleNumber: 1,
     };
 
     const normalizedType = getAssignmentType(assignmentType);
@@ -282,48 +163,36 @@ export async function POST(req: NextRequest) {
     const newAssignment: Assignment = {
       id: `assign-${Date.now()}`,
       title,
-      description: description || `Course assignment for ${subjectName}`,
+      description: description || `Course assignment for ${subject.name}`,
       subjectId: subject.id,
-      subjectCode,
-      subjectName,
+      subjectCode: subject.code,
+      subjectName: subject.name,
       moduleId: mod.id,
       moduleTitle: mod.title,
-      departmentId,
-      semesterNumber,
+      departmentId: subject.departmentId,
+      semesterNumber: subject.semesterNumber,
       facultyId: faculty.id,
       facultyName: faculty.name,
       totalMarks: Number(totalMarks),
       deadline: new Date(deadline).toISOString(),
       allowLate: Boolean(allowLate),
-      instructions:
-        instructions.length > 0
-          ? instructions
-          : [
-              "Read problem statement carefully before answering.",
-              "Plagiarism detection is active. Do not share solution code.",
-            ],
+      instructions: instructions.length > 0 ? instructions : [
+        "Read problem statement carefully before answering.",
+        "Plagiarism detection is active. Do not share solution code.",
+      ],
       assignmentType: normalizedType,
       allowedFileTypes: typeConfig.allowedFileTypes,
-      maxFileSize: Math.min(
-        Math.max(Number(maxFileSize) || 25 * 1024 * 1024, 1024),
-        100 * 1024 * 1024
-      ),
-      maxFiles: Math.min(
-        Math.max(Number(maxFiles ?? typeConfig.maxFiles), normalizedType === "text" ? 0 : 1),
-        10
-      ),
+      maxFileSize: Math.min(Math.max(Number(maxFileSize) || 25 * 1024 * 1024, 1024), 100 * 1024 * 1024),
+      maxFiles: Math.min(Math.max(Number(maxFiles ?? typeConfig.maxFiles), normalizedType === "text" ? 0 : 1), 10),
       createdAt: new Date().toISOString(),
     };
 
+    await connectToDatabase();
     const saved = await AssignmentModel.create(newAssignment);
-    store.createAssignment(newAssignment);
     await createAssignmentNotification(newAssignment);
     return NextResponse.json({ success: true, assignment: saved }, { status: 201 });
   } catch (err: any) {
     const status = err.status || 500;
-    return NextResponse.json(
-      { error: err.message || "Failed to create assignment" },
-      { status }
-    );
+    return NextResponse.json({ error: err.message || "Failed to create assignment" }, { status });
   }
 }
