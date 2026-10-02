@@ -20,6 +20,9 @@ import {
   Sparkles,
   FileCode,
   ShieldAlert,
+  FileText,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -32,7 +35,6 @@ export default function AssignmentDetailPage() {
 
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [userSubmission, setUserSubmission] = useState<Submission | null>(null);
-  const [allSubmissions, setAllSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Form State
@@ -49,20 +51,25 @@ export default function AssignmentDetailPage() {
       if (res.ok) {
         const d = await res.json();
         setAssignment(d.assignment);
-        setAllSubmissions(d.submissions || []);
 
-        // Find user submission
-        const existing = (d.submissions || []).find(
-          (s: Submission) => s.studentId === user?.id || s.studentName === user?.name
-        );
-        if (existing) {
-          setUserSubmission(existing);
-          setContent(existing.content || "");
-          setFileName(existing.fileName || "");
+        // Fetch actual persistent submission from server
+        if (d.userSubmission) {
+          setUserSubmission(d.userSubmission);
+        } else if (Array.isArray(d.submissions)) {
+          const existing = d.submissions.find(
+            (s: Submission) => s.studentId === user?.id || s.studentName === user?.name
+          );
+          if (existing) {
+            setUserSubmission(existing);
+          } else {
+            setUserSubmission(null);
+          }
+        } else {
+          setUserSubmission(null);
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load assignment:", err);
     } finally {
       setLoading(false);
     }
@@ -74,6 +81,13 @@ export default function AssignmentDetailPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return; // Prevent double submission clicks
+
+    if (userSubmission) {
+      toast.error("You have already submitted this assignment.");
+      return;
+    }
+
     const type = getAssignmentType(assignment?.assignmentType);
     if (type === "text" && !content.trim()) {
       toast.error("Please enter your written answer before submitting.");
@@ -89,6 +103,8 @@ export default function AssignmentDetailPage() {
       const formData = new FormData();
       formData.append("content", content);
       selectedFiles.forEach((file) => formData.append("files", file));
+      if (fileName) formData.append("fileName", fileName);
+
       const res = await fetch(`/api/assignments/${id}/submit`, {
         method: "POST",
         body: formData,
@@ -145,6 +161,7 @@ export default function AssignmentDetailPage() {
   const isLocked = isExpired && !assignment.allowLate;
   const assignmentType = getAssignmentType(assignment.assignmentType);
   const typeConfig = getAssignmentConfig(assignmentType);
+  const isEvaluated = userSubmission && (userSubmission.status === "graded" || userSubmission.marks !== undefined);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-200">
@@ -164,9 +181,7 @@ export default function AssignmentDetailPage() {
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
               {assignment.subjectCode} - {assignment.subjectName}
             </span>
-            <span className="text-xs text-slate-500">
-              {assignment.moduleTitle}
-            </span>
+            <span className="text-xs text-slate-500">{assignment.moduleTitle}</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -193,7 +208,7 @@ export default function AssignmentDetailPage() {
           {assignment.description}
         </p>
 
-        {/* Live Countdown & Lock Status Banner */}
+        {/* Live Countdown & Status Banner */}
         <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <DeadlineCountdown
@@ -223,7 +238,7 @@ export default function AssignmentDetailPage() {
         </ul>
       </div>
 
-      {/* Strict Deadline Lock Banner */}
+      {/* Strict Deadline Lock Banner (if not submitted and deadline passed) */}
       {isLocked && !userSubmission && (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-5 text-rose-900 flex items-start gap-3">
           <Lock className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
@@ -238,77 +253,207 @@ export default function AssignmentDetailPage() {
         </div>
       )}
 
-      {/* Existing Submission Banner if already submitted */}
-      {userSubmission && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 sm:p-6 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <h3 className="font-bold text-emerald-900 text-sm sm:text-base">
-                Submission Recorded on Server
-              </h3>
+      {/* ========================================================================= */}
+      {/* PERSISTENT SUBMISSION VIEW: When already submitted (NOT SUBMITTED -> SUBMITTED -> EVALUATED) */}
+      {/* ========================================================================= */}
+      {userSubmission ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+          {/* Header Status Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                  isEvaluated
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-indigo-100 text-indigo-700"
+                }`}
+              >
+                {isEvaluated ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : (
+                  <FileCheck2 className="w-5 h-5" />
+                )}
+              </div>
+              <div>
+                <h3 className="font-bold text-base sm:text-lg text-slate-900 flex items-center gap-2">
+                  <span>
+                    {isEvaluated
+                      ? "Assignment Evaluated & Graded"
+                      : "Submission Recorded on Server"}
+                  </span>
+                  <span
+                    className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
+                      isEvaluated
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : userSubmission.status === "late"
+                        ? "bg-rose-50 text-rose-800 border border-rose-200"
+                        : "bg-indigo-50 text-indigo-800 border border-indigo-200"
+                    }`}
+                  >
+                    {isEvaluated
+                      ? "Evaluated"
+                      : userSubmission.status === "late"
+                      ? "Submitted Late"
+                      : "Submitted"}
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>
+                    Submitted on:{" "}
+                    <strong>{formatDate(userSubmission.submittedAt)}</strong>
+                  </span>
+                </p>
+              </div>
             </div>
-            <span className="text-xs text-emerald-700 font-mono">
-              {formatDate(userSubmission.submittedAt)}
-            </span>
+
+            {/* Evaluation Marks Pill if graded */}
+            {isEvaluated && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+                <Award className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+                    Final Score
+                  </div>
+                  <div className="text-lg font-extrabold text-emerald-900">
+                    {userSubmission.marks} / {userSubmission.maxMarks || assignment.totalMarks}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <p className="text-xs text-emerald-800">
-            File submitted: <strong>{userSubmission.fileName}</strong> ({userSubmission.fileSize})
-          </p>
-
-          {/* Graded Feedback if graded */}
-          {userSubmission.status === "graded" && (
-            <div className="mt-3 p-4 bg-white rounded-xl border border-emerald-300 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-slate-700">Evaluation Marks:</span>
-                <span className="text-base font-bold text-emerald-600">
-                  {userSubmission.marks} / {userSubmission.maxMarks}
+          {/* Faculty Evaluation & Feedback Section */}
+          {isEvaluated && (
+            <div className="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-emerald-700" />
+                  <span>Instructor Evaluation & Feedback</span>
                 </span>
+                {(userSubmission.gradedBy || userSubmission.evaluatedBy) && (
+                  <span className="text-xs text-emerald-700 font-medium">
+                    Evaluated by:{" "}
+                    <strong>{userSubmission.evaluatedBy || userSubmission.gradedBy}</strong>
+                    {userSubmission.gradedAt && (
+                      <span className="text-slate-400 ml-1">
+                        ({formatDate(userSubmission.gradedAt)})
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
-              {userSubmission.feedback && (
-                <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                  <strong>Faculty Feedback:</strong> {userSubmission.feedback}
+
+              {userSubmission.feedback ? (
+                <div className="p-4 bg-white rounded-xl border border-emerald-200/80 text-xs sm:text-sm text-slate-800 leading-relaxed italic">
+                  &ldquo;{userSubmission.feedback}&rdquo;
+                </div>
+              ) : (
+                <p className="text-xs text-emerald-700 italic">
+                  Graded with no written remarks.
                 </p>
               )}
             </div>
           )}
 
-          {/* Similarity score if calculated */}
-          {userSubmission.similarity && (
-            <div className="pt-2 flex items-center gap-2 text-xs">
-              <span className="text-slate-600 font-medium">Similarity Analysis:</span>
-              <SimilarityBadge
-                similarity={userSubmission.similarity}
-                onClick={() => setSelectedSimilaritySub(userSubmission)}
-              />
+          {/* Pending evaluation advisory note */}
+          {!isEvaluated && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-3">
+              <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+              <div className="text-xs leading-relaxed">
+                <strong>Awaiting Instructor Evaluation:</strong> Your solution has been securely
+                persisted to MongoDB. Once instructor <strong>{assignment.facultyName}</strong>{" "}
+                completes the evaluation, your marks and personalized feedback will appear right here.
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Submission Portal Form */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-5">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h3 className="font-bold text-base sm:text-lg text-slate-900 flex items-center gap-2">
-              <FileCode className="w-5 h-5 text-indigo-600" />
-              <span>{userSubmission ? "Update Submission" : `Submit ${typeConfig.label}`}</span>
-            </h3>
-            <p className="text-xs text-slate-500">
-              {typeConfig.description} Comparable text and code submissions undergo similarity analysis.
-            </p>
+          {/* Submitted Content Preview */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+              <div className="flex items-center gap-1.5">
+                <FileCode className="w-4 h-4 text-indigo-600" />
+                <span>Submitted Work ({userSubmission.fileName || "Solution"})</span>
+                {userSubmission.fileSize && (
+                  <span className="text-slate-400 font-normal">({userSubmission.fileSize})</span>
+                )}
+              </div>
+
+              {/* Similarity Badge */}
+              {userSubmission.similarity && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 font-normal">Similarity Score:</span>
+                  <SimilarityBadge
+                    similarity={userSubmission.similarity}
+                    onClick={() => setSelectedSimilaritySub(userSubmission)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Read-only Content Viewer */}
+            <div className="rounded-2xl border border-slate-300 bg-slate-950 p-4 text-xs font-mono text-slate-100 overflow-x-auto max-h-96 leading-relaxed">
+              <pre>{userSubmission.content}</pre>
+            </div>
+
+            {/* Uploaded Files if any */}
+            {userSubmission.files && userSubmission.files.length > 0 && (
+              <div className="space-y-2 pt-2">
+                <span className="text-xs font-semibold text-slate-700">Attached Files:</span>
+                <div className="flex flex-wrap gap-2">
+                  {userSubmission.files.map((file, i) => (
+                    <a
+                      key={i}
+                      href={file.url}
+                      download={file.originalName}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>{file.originalName}</span>
+                      <span className="text-slate-400 text-[10px]">
+                        ({Math.round(file.size / 1024)} KB)
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Helper buttons for code assignments */}
-          {!isLocked && assignmentType === "code" && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setFileName("Aditya_AVL_Solution.cpp");
-                  setContent(`// Original AVL Tree Implementation
-// Student: Aditya Kumar (CS22B1045)
+          {/* Informational Footer: Submission is final */}
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+            <span>
+              Academic Policy: Submissions are permanent records and cannot be resubmitted or deleted.
+            </span>
+            <span className="text-emerald-700 font-medium">✓ Record Verified</span>
+          </div>
+        </div>
+      ) : (
+        /* ========================================================================= */
+        /* SUBMISSION FORM: Only visible when NOT SUBMITTED and not locked */
+        /* ========================================================================= */
+        !isLocked && (
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="font-bold text-base sm:text-lg text-slate-900 flex items-center gap-2">
+                  <FileCode className="w-5 h-5 text-indigo-600" />
+                  <span>Submit {typeConfig.label}</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {typeConfig.description} Plagiarism detection runs automatically upon submission.
+                </p>
+              </div>
+
+              {/* Helper buttons for code assignments */}
+              {assignmentType === "code" && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFileName("Aditya_AVL_Solution.cpp");
+                      setContent(`// Original AVL Tree Implementation
+// Student: ${user?.name || "Student"} (${user?.rollNumber || "CS22B1045"})
 #include <iostream>
 using namespace std;
 
@@ -326,7 +471,7 @@ class AVLTree {
     
 public:
     void insert(int key) {
-        // clean balanced BST logic
+        // Balanced BST insertion logic
     }
 };
 int main() {
@@ -334,19 +479,19 @@ int main() {
     tree.insert(10);
     return 0;
 }`);
-                  toast.info("Original sample code inserted!");
-                }}
-                className="text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 font-medium flex items-center gap-1 transition-colors"
-              >
-                <Sparkles className="w-3 h-3 text-indigo-500" />
-                <span>Insert Original Code</span>
-              </button>
+                      toast.info("Sample source code inserted!");
+                    }}
+                    className="text-[11px] px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 font-medium flex items-center gap-1 transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    <span>Insert Original Code</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setFileName("Copied_Solution_Demo.cpp");
-                  setContent(`// Testing Plagiarism Detector
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFileName("Copied_Solution_Demo.cpp");
+                      setContent(`// Testing Plagiarism Detector
 #include <iostream>
 #include <algorithm>
 using namespace std;
@@ -371,86 +516,106 @@ Node* rightRotate(Node *y) {
     x->height = max(getHeight(x->left), getHeight(x->right)) + 1;
     return x;
 }`);
-                  toast.warning("Copied snippet inserted to test similarity detection!");
-                }}
-                className="text-[11px] px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 font-medium flex items-center gap-1 transition-colors"
-              >
-                <ShieldAlert className="w-3 h-3 text-amber-600" />
-                <span>Insert Overlapping Code</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {assignmentType === "code" && <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              File Name / Identifier
-            </label>
-            <input
-              type="text"
-              value={fileName}
-              disabled={isLocked}
-              onChange={(e) => setFileName(e.target.value)}
-              placeholder="e.g. Solution_AVLTree.cpp"
-              className="w-full text-xs font-mono rounded-lg border border-slate-300 p-2.5 text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed"
-            />
-          </div>}
-
-          {(assignmentType === "code" || assignmentType === "text") && <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              {assignmentType === "code" ? "Source Code" : "Your Answer"} *
-            </label>
-            <textarea
-              rows={12}
-              value={content}
-              disabled={isLocked}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Paste or write your program code or text response here..."
-              className="w-full text-xs text-white! font-mono rounded-xl border border-slate-300 p-3.5 bg-slate-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
-              required
-            />
-          </div>}
-
-          {assignmentType !== "text" && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="submission-files">
-                {assignmentType === "code" ? "Upload Source Files (optional)" : `Upload ${typeConfig.label} *`}
-              </label>
-              <input
-                id="submission-files"
-                type="file"
-                accept={typeConfig.accept}
-                multiple={typeConfig.maxFiles > 1}
-                disabled={isLocked}
-                onChange={(e) => setSelectedFiles(Array.from(e.target.files || []).slice(0, typeConfig.maxFiles))}
-                className="w-full text-xs rounded-xl border border-dashed border-slate-300 p-3 text-slate-700 bg-slate-50 disabled:opacity-60"
-              />
-              <p className="mt-1.5 text-[11px] text-slate-500">
-                Accepted: {typeConfig.accept || "none"}. Maximum {typeConfig.maxFiles} file{typeConfig.maxFiles === 1 ? "" : "s"}; server validation is enforced.
-              </p>
-              {selectedFiles.length > 0 && <p className="mt-1 text-[11px] text-emerald-700">Selected: {selectedFiles.map((file) => file.name).join(", ")}</p>}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-2">
-            <div className="text-[11px] text-slate-400">
-              {isLocked ? "Submission form disabled" : "Submitting as: " + (user?.name || "Student")}
+                      toast.warning("Plagiarism test snippet inserted!");
+                    }}
+                    className="text-[11px] px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 font-medium flex items-center gap-1 transition-colors"
+                  >
+                    <ShieldAlert className="w-3 h-3 text-amber-600" />
+                    <span>Insert Overlapping Code</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            <button
-              type="submit"
-              disabled={submitting || isLocked}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm shadow-md shadow-indigo-600/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send className="w-4 h-4" />
-              <span>{submitting ? "Analyzing & Submitting..." : userSubmission ? "Resubmit Solution" : "Submit Assignment"}</span>
-            </button>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {assignmentType === "code" && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    File Name / Solution Identifier
+                  </label>
+                  <input
+                    type="text"
+                    value={fileName}
+                    disabled={submitting}
+                    onChange={(e) => setFileName(e.target.value)}
+                    placeholder="e.g. Solution_AVLTree.cpp"
+                    className="w-full text-xs font-mono rounded-lg border border-slate-300 p-2.5 text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  />
+                </div>
+              )}
+
+              {(assignmentType === "code" || assignmentType === "text") && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {assignmentType === "code" ? "Source Code *" : "Your Answer *"}
+                  </label>
+                  <textarea
+                    rows={12}
+                    value={content}
+                    disabled={submitting}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Paste or write your program code or text response here..."
+                    className="w-full text-xs text-white! font-mono rounded-xl border border-slate-300 p-3.5 bg-slate-950 focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
+                    required
+                  />
+                </div>
+              )}
+
+              {assignmentType !== "text" && (
+                <div>
+                  <label
+                    className="block text-xs font-semibold text-slate-700 mb-1"
+                    htmlFor="submission-files"
+                  >
+                    {assignmentType === "code"
+                      ? "Upload Source Files (optional)"
+                      : `Upload ${typeConfig.label} *`}
+                  </label>
+                  <input
+                    id="submission-files"
+                    type="file"
+                    accept={typeConfig.accept}
+                    multiple={typeConfig.maxFiles > 1}
+                    disabled={submitting}
+                    onChange={(e) =>
+                      setSelectedFiles(
+                        Array.from(e.target.files || []).slice(0, typeConfig.maxFiles)
+                      )
+                    }
+                    className="w-full text-xs rounded-xl border border-dashed border-slate-300 p-3 text-slate-700 bg-slate-50 disabled:opacity-60"
+                  />
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Accepted: {typeConfig.accept || "none"}. Maximum {typeConfig.maxFiles} file
+                    {typeConfig.maxFiles === 1 ? "" : "s"}; single submission policy enforced.
+                  </p>
+                  {selectedFiles.length > 0 && (
+                    <p className="mt-1 text-[11px] text-emerald-700">
+                      Selected: {selectedFiles.map((file) => file.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2">
+                <div className="text-[11px] text-slate-400">
+                  Submitting as: <strong>{user?.name || "Student"}</strong> ({user?.rollNumber || "ID"})
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs sm:text-sm shadow-md shadow-indigo-600/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{submitting ? "Analyzing & Submitting..." : "Submit Assignment"}</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </div>
+        )
+      )}
 
-      {/* Similarity Detail Inspector Modal */}
+      {/* Similarity Detail Modal */}
       <SimilarityDetailModal
         currentSubmission={selectedSimilaritySub}
         isOpen={Boolean(selectedSimilaritySub)}
@@ -459,4 +624,3 @@ Node* rightRotate(Node *y) {
     </div>
   );
 }
-

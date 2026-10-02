@@ -11,7 +11,8 @@
     "seed:admin": "tsx scripts/seed.ts",
     "seed:demo": "tsx scripts/seed.ts",
     "migrate:branches": "tsx scripts/migrate-branches.ts",
-    "test:management": "tsx scripts/test-faculty-branch-management.ts"
+    "test:management": "tsx scripts/test-faculty-branch-management.ts",
+    "test:lifecycle": "tsx scripts/test-assignment-lifecycle.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -26,6 +27,7 @@
     "jose": "^6.2.12",
     "lucide-react": "^1.47.0",
     "mongoose": "^9.10.1",
+    "motion": "^13.5.0",
     "next": "15.5.25",
     "nodemailer": "^10.0.10",
     "react": "19.1.0",

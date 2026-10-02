@@ -142,6 +142,8 @@ export interface Submission {
   feedback?: string;
   gradedAt?: string;
   gradedBy?: string;
+  evaluatedAt?: string;
+  evaluatedBy?: string;
   similarity?: SimilarityDetail;
 }
 
