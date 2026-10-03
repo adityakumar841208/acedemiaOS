@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   try {
     await connectToDatabase();
 
+    const currentUser = await getCurrentUser();
+
     // Ensure database catalog has records populated
     const count = await SubjectModel.countDocuments();
     if (count === 0) {
@@ -24,8 +26,32 @@ export async function GET(req: NextRequest) {
 
     const query: Record<string, any> = {};
 
+    const normalizeDepartment = (value: string) =>
+      value.replace(/^(dept-|department-)/i, "").trim().toLowerCase();
+    const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    if (
+      currentUser &&
+      (currentUser.role === "STUDENT" || currentUser.role === "CR")
+    ) {
+      const department = normalizeDepartment(currentUser.department || "");
+      const semester = Number(currentUser.semester);
+
+      query.$and = [
+        { semesterNumber: Number.isInteger(semester) ? semester : -1 },
+        {
+          $or: [
+            { departmentId: new RegExp(`^(dept-|department-)?${escapeRegex(department)}$`, "i") },
+            { branchCode: new RegExp(`^${escapeRegex(department)}$`, "i") },
+          ],
+        },
+      ];
+      query.isActive = { $ne: false };
+    }
+
     // Filter by branch/department if specified
-    if (deptId && deptId !== "ALL") {
+    if (!currentUser || (currentUser.role !== "STUDENT" && currentUser.role !== "CR")) {
+      if (deptId && deptId !== "ALL") {
       const norm = deptId.replace(/^(dept-|department-)/i, "").toUpperCase();
       query.$or = [
         { departmentId: deptId },
@@ -33,11 +59,12 @@ export async function GET(req: NextRequest) {
         { departmentId: norm },
         { branchCode: norm },
       ];
-    }
+      }
 
-    // Filter by semester if specified
-    if (semNumber !== undefined && !isNaN(semNumber) && semNumber > 0) {
-      query.semesterNumber = semNumber;
+      // Filter by semester if specified
+      if (semNumber !== undefined && !isNaN(semNumber) && semNumber > 0) {
+        query.semesterNumber = semNumber;
+      }
     }
 
     // Filter by active status
@@ -51,7 +78,9 @@ export async function GET(req: NextRequest) {
     if (search) {
       const regex = new RegExp(search, "i");
       const searchCond = [{ name: regex }, { code: regex }, { description: regex }];
-      if (query.$or) {
+      if (query.$and) {
+        query.$and.push({ $or: searchCond });
+      } else if (query.$or) {
         query.$and = [{ $or: query.$or }, { $or: searchCond }];
         delete query.$or;
       } else {
@@ -103,12 +132,20 @@ export async function GET(req: NextRequest) {
         isActive: s.isActive !== false,
       };
     });
+    const uniqueSubjects = Array.from(
+      new Map(
+        subjects.map((subject: any) => [
+          `${subject.departmentId}-${subject.semesterNumber}-${String(subject.code).toLowerCase()}`,
+          subject,
+        ])
+      ).values()
+    );
 
     return NextResponse.json({
       success: true,
       departments,
       semesters,
-      subjects,
+      subjects: uniqueSubjects,
       modules: allModules,
     });
   } catch (err: any) {

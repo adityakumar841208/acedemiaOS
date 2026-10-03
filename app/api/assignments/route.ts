@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { store } from "@/lib/store";
 import { Assignment } from "@/types";
-import { requireRole } from "@/lib/auth";
+import { getCurrentUser, requireRole } from "@/lib/auth";
 import connectToDatabase from "@/lib/db";
 import AssignmentModel from "@/models/Assignment";
 import SubjectModel from "@/models/Subject";
@@ -14,6 +14,7 @@ import { getAssignmentConfig, getAssignmentType } from "@/lib/assignment-types";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const subjectId = searchParams.get("subjectId") || undefined;
+  const currentUser = await getCurrentUser();
   
   let rawAssignments: any[] = [];
   try {
@@ -43,6 +44,21 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("Assignment database read failed; using local fallback.", error);
     rawAssignments = store.getAssignments(subjectId);
+  }
+
+  if (currentUser && (currentUser.role === "STUDENT" || currentUser.role === "CR")) {
+    const department = (currentUser.department || "")
+      .replace(/^(dept-|department-)/i, "")
+      .trim()
+      .toLowerCase();
+    const semester = Number(currentUser.semester);
+    rawAssignments = rawAssignments.filter((assignment) => {
+      const assignmentDepartment = String(assignment.departmentId || "")
+        .replace(/^(dept-|department-)/i, "")
+        .trim()
+        .toLowerCase();
+      return assignmentDepartment === department && Number(assignment.semesterNumber) === semester;
+    });
   }
 
   // Enrich with live submission & evaluation statistics

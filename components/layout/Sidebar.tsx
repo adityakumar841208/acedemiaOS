@@ -60,6 +60,11 @@ export default function Sidebar() {
         { name: "Resource Vault", href: "/resources", icon: FolderArchive },
         { name: "Assignments", href: "/assignments", icon: FileCheck2 },
         { name: "Announcements", href: "/announcements", icon: Megaphone },
+        { name: "AI Practice", href: "/ai-practice", icon: BrainCircuit },
+        { name: "Doubts", href: "/doubts", icon: MessageCircleQuestion },
+        { name: "Attendance", href: "/attendance", icon: ClipboardCheck },
+
+
         { name: "My Profile", href: "/profile", icon: User },
       ];
     }

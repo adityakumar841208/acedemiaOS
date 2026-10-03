@@ -102,7 +102,10 @@ export async function GET(req: NextRequest) {
       const subjects = await SubjectModel.find({ semesterNumber: student.semester, departmentId: new RegExp(`^(dept-|department-)?${normalizeDepartment(student.department)}$`, "i") }).select("id code name departmentId").lean();
       const sessions = await Attendance.find({ subjectId: { $in: subjects.map((subject: any) => subject.id) }, $or: [{ dayType: "holiday" }, { dayType: { $in: ["attendance", null] }, "records.studentId": studentId }] }).select("subjectId date dayType holidayName records").sort({ date: -1 }).lean();
       const summary = subjects.map((subject: any) => {
-        const records = sessions.filter((session: any) => session.subjectId === subject.id && session.dayType !== "holiday").map((session: any) => session.records.find((record: any) => record.studentId === studentId)).filter(Boolean);
+        const records = sessions
+          .filter((session: any) => session.subjectId === subject.id && session.dayType !== "holiday")
+          .map((session: any) => session.records.find((record: any) => record.studentId === studentId))
+          .filter(Boolean);
         const present = records.filter((record: any) => record.status === "present").length;
         return { ...subject, presentClasses: present, totalClasses: records.length, percentage: records.length ? Math.round((present / records.length) * 1000) / 10 : null };
       });
@@ -171,11 +174,25 @@ export async function PUT(req: NextRequest) {
     if (!entries.length || entries.length > 366) return NextResponse.json({ error: "Provide between 1 and 366 attendance dates." }, { status: 400 });
     const students = await getEnrolledStudents(subject);
     const enrolledIds = new Set(students.map((student) => student.id));
-    const operations = entries.map((entry: any) => {
+    const updates = entries.map((entry: any) => {
       const date = dateKey(String(entry.date || ""));
       assertNotFuture(date);
       const key = { subjectId: subject.id, branchCode: normalizeDepartment(subject.departmentId), semesterNumber: subject.semesterNumber, date: dateValue(date) };
-      if (entry.type === "holiday") return { updateOne: { filter: key, update: { $set: { ...key, facultyId: user.id, branchId: String(subject.departmentId), dayType: "holiday", holidayName: String(entry.holidayName || "Holiday").trim(), records: [] } as any, upsert: true } } };
+      if (entry.type === "holiday") {
+        return {
+          filter: key,
+          update: {
+            $set: {
+              ...key,
+              facultyId: user.id,
+              branchId: String(subject.departmentId),
+              dayType: "holiday",
+              holidayName: String(entry.holidayName || "Holiday").trim(),
+              records: [],
+            },
+          },
+        };
+      }
       const records = Array.isArray(entry.records) ? entry.records : [];
       if (records.length !== students.length) throw new Error(`${date}: attendance must include every enrolled student.`);
       const seen = new Set<string>();
@@ -185,10 +202,28 @@ export async function PUT(req: NextRequest) {
         seen.add(studentId);
         return { studentId, status: normalizeAttendance(record.status) };
       });
-      return { updateOne: { filter: key, update: { $set: { ...key, facultyId: user.id, branchId: String(subject.departmentId), dayType: "attendance", holidayName: undefined, records: normalizedRecords } as any, upsert: true } } };
+      return {
+        filter: key,
+        update: {
+          $set: {
+            ...key,
+            facultyId: user.id,
+            branchId: String(subject.departmentId),
+            dayType: "attendance",
+            records: normalizedRecords,
+          },
+          $unset: { holidayName: 1 },
+        },
+      };
     });
-    const result = await Attendance.bulkWrite(operations, { ordered: true });
-    return NextResponse.json({ success: true, matched: result.matchedCount, upserted: result.upsertedCount, message: "Attendance dates saved." });
+    for (const update of updates) {
+      await Attendance.findOneAndUpdate(update.filter, update.update, {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      });
+    }
+    return NextResponse.json({ success: true, saved: updates.length, message: "Attendance dates saved." });
   } catch (error: any) {
     return errorResponse(error);
   }

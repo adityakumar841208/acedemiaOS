@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Subject, Module } from "@/types";
 import { useUserSession } from "@/context/UserContext";
@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner";
 
 export default function SubjectsPage() {
-  const { user, isCR } = useUserSession();
+  const { user, isCR, isStudent, isFaculty } = useUserSession();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +30,39 @@ export default function SubjectsPage() {
   const [editingModules, setEditingModules] = useState<Module[]>([]);
   const [loadingModules, setLoadingModules] = useState(false);
 
+  const uniqueSubjects = useMemo(() => {
+    const unique = new Map<string, Subject>();
+    subjects.forEach((subject) => {
+      const department = (subject.departmentId || "unknown").replace(/^(dept-|department-)/i, "").toLowerCase();
+      const key = `${department}-${subject.semesterNumber}-${subject.code.toLowerCase()}`;
+      if (!unique.has(key)) unique.set(key, subject);
+    });
+    return Array.from(unique.values());
+  }, [subjects]);
+
+  const subjectGroups = useMemo(() => {
+    if (!isFaculty) return [{ key: "current", label: "", subjects: uniqueSubjects }];
+
+    const groups = new Map<string, { key: string; label: string; subjects: Subject[] }>();
+    uniqueSubjects.forEach((subject) => {
+      const department = (subject.departmentId || "Unknown")
+        .replace(/^(dept-|department-)/i, "")
+        .toUpperCase();
+      const key = `${department}-${subject.semesterNumber}`;
+      const group = groups.get(key) || {
+        key,
+        label: `${department} · Semester ${subject.semesterNumber}`,
+        subjects: [],
+      };
+      group.subjects.push(subject);
+      groups.set(key, group);
+    });
+
+    return Array.from(groups.values()).sort((first, second) =>
+      first.label.localeCompare(second.label, undefined, { numeric: true })
+    );
+  }, [isFaculty, uniqueSubjects]);
+
   useEffect(() => {
     async function loadSubjects() {
       try {
@@ -37,7 +70,16 @@ export default function SubjectsPage() {
         const res = await fetch("/api/subjects");
         if (res.ok) {
           const d = await res.json();
-          setSubjects(d.subjects || []);
+          setSubjects(
+            Array.from(
+              new Map(
+                (d.subjects || []).map((subject: Subject) => [
+                  `${subject.departmentId}-${subject.semesterNumber}-${subject.code}`,
+                  subject,
+                ])
+              ).values()
+            ) as Subject[]
+          );
         }
       } catch (err) {
         console.error(err);
@@ -89,10 +131,14 @@ export default function SubjectsPage() {
           <span>DEPARTMENT OF COMPUTER SCIENCE & ENGINEERING</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-          Semester 3 Curriculum & Subjects
+          {isStudent || isCR
+            ? `Semester ${user?.semester || "Current"} Curriculum & Subjects`
+            : "Curriculum & Subjects"}
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Explore course outlines, module breakdowns, lecture notes, and faculty contacts.
+          {isStudent || isCR
+            ? `Showing subjects for ${user?.department || "your department"} and your current semester.`
+            : "Explore course outlines, module breakdowns, lecture notes, and faculty contacts."}
         </p>
 
         {isCR && (
@@ -110,8 +156,17 @@ export default function SubjectsPage() {
           <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {subjects.map((sub) => {
+        <div className="space-y-8">
+          {subjectGroups.map((group) => (
+            <section key={group.key} className="space-y-3">
+              {isFaculty && (
+                <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.16em] text-slate-600">
+                  <span className="h-px w-6 bg-amber-500" />
+                  {group.label}
+                </h2>
+              )}
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {group.subjects.map((sub) => {
             const canManage = isAuthorizedCRForSubject(user, sub);
 
             return (
@@ -200,7 +255,10 @@ export default function SubjectsPage() {
                 </div>
               </div>
             );
-          })}
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 

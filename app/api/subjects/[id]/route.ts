@@ -26,6 +26,22 @@ export async function GET(
       return NextResponse.json({ error: "Subject not found in database." }, { status: 404 });
     }
 
+    const currentUser = await getCurrentUser();
+    if (currentUser && (currentUser.role === "STUDENT" || currentUser.role === "CR")) {
+      const normalizeDepartment = (value?: string) =>
+        (value || "").replace(/^(dept-|department-)/i, "").trim().toLowerCase();
+      const userDepartment = normalizeDepartment(currentUser.department);
+      const subjectDepartment = normalizeDepartment(subject.departmentId || subject.branchCode);
+      const isRelevant =
+        userDepartment === subjectDepartment &&
+        Number(currentUser.semester) === Number(subject.semesterNumber) &&
+        subject.isActive !== false;
+
+      if (!isRelevant) {
+        return NextResponse.json({ error: "Subject is not available for your current department and semester." }, { status: 403 });
+      }
+    }
+
     // Load related resources and assignments from database
     const [assignments, resources] = await Promise.all([
       AssignmentModel.find({ subjectId: subject.id }).sort({ deadline: 1 }).lean(),
