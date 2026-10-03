@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { usePathname } from "next/navigation";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
+import AIAssistant from "@/components/ai/AIAssistant";
 import { Menu, X } from "lucide-react";
 
 export default function DashboardLayout({
@@ -66,6 +67,9 @@ export default function DashboardLayout({
           </div>
         </main>
       </div>
+
+      {/* Floating Read-Only AI Assistant */}
+      <AIAssistant />
     </div>
   );
 }
