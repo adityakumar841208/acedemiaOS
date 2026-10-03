@@ -2,8 +2,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, X, Send, RotateCcw, Bot, User, Loader2 } from "lucide-react";
+import { X, Send, RotateCcw, Bot, User, Loader2, Sparkles } from "lucide-react";
 import { useUserSession } from "@/context/UserContext";
+import Image from "next/image";
 
 interface ChatMessage {
   id: string;
@@ -158,7 +159,7 @@ export default function AIAssistant() {
         onClick={() => setIsOpen((prev) => !prev)}
         whileHover={{ scale: 1.06 }}
         whileTap={{ scale: 0.94 }}
-        className="fixed bottom-20 right-6 z-50 flex h-13 w-13 items-center justify-center rounded-full bg-slate-950 text-amber-400 border border-amber-500/40 shadow-[0_8px_25px_rgba(217,119,6,0.3)] hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/60 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors sm:bottom-22"
+        className="fixed bottom-20 right-6 z-50 flex h-20 w-20 items-center pointer justify-center overflow-hidden rounded-full border border-cyan-300/40 bg-[radial-gradient(circle_at_50%_35%,rgba(34,211,238,0.24),transparent_48%),linear-gradient(145deg,#172033,#050914)] text-amber-400 shadow-[0_0_18px_rgba(34,211,238,0.32),0_0_42px_rgba(245,158,11,0.18),inset_0_0_18px_rgba(125,211,252,0.16)] hover:border-cyan-200/80 hover:shadow-[0_0_24px_rgba(34,211,238,0.48),0_0_52px_rgba(245,158,11,0.24),inset_0_0_20px_rgba(125,211,252,0.2)] focus:outline-none focus:ring-2 focus:ring-cyan-300/70 focus:ring-offset-2 focus:ring-offset-slate-900 transition-[border-color,box-shadow] sm:bottom-22"
       >
         <AnimatePresence mode="wait" initial={false}>
           {isOpen ? (
@@ -169,7 +170,7 @@ export default function AIAssistant() {
               exit={{ rotate: 90, opacity: 0 }}
               transition={{ duration: 0.15 }}
             >
-              <X className="h-6 w-6 text-slate-200" />
+              <X className="h-10 w-10 text-slate-200" />
             </motion.div>
           ) : (
             <motion.div
@@ -178,13 +179,20 @@ export default function AIAssistant() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.7, opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="relative flex items-center justify-center"
+              className="relative flex h-16 w-16 items-center justify-center pointer"
             >
-              <Sparkles className="h-6 w-6 text-amber-400" />
-              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" />
-              </span>
+              <span
+                aria-hidden="true"
+                className="absolute inset-2 rounded-full bg-cyan-300/25 blur-xl"
+              />
+              <Image
+                src="/bot.png"
+                alt=""
+                width={72}
+                height={72}
+                aria-hidden="true"
+                className="relative h-[4.5rem] w-[4.5rem] object-contain drop-shadow-[0_0_7px_rgba(34,211,238,0.95)]"
+              />
             </motion.div>
           )}
         </AnimatePresence>
